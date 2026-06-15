@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>千房HD 売上ダッシュボード v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f6f3;--surface:#fff;--surface2:#f0efe9;
+  --border:rgba(0,0,0,.09);--border2:rgba(0,0,0,.15);
+  --text1:#1a1917;--text2:#6b6a64;--text3:#9c9b95;
+  --blue:#1a6fc4;--blue-l:#deeaf8;
+  --green:#1a7a54;--green-l:#d8f0e6;
+  --red:#c0392b;--red-l:#fce8e6;
+  --amber:#9a6108;--amber-l:#fdf0d5;
+  --purple:#5c47b8;--purple-l:#eeecfc;
+  --teal:#0e8c99;--teal-l:#d6f3f6;
+  --chibo:#c0392b;
+  --r:10px;--rs:6px;
+}
+body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:var(--bg);color:var(--text1);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* LAYOUT */
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:230px;min-width:230px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;transition:width .2s}
+.sidebar.collapsed{width:52px;min-width:52px}
+.main{flex:1;overflow-y:auto;padding:24px}
+
+/* SIDEBAR HEADER */
+.sb-header{padding:16px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-mark{width:30px;height:30px;border-radius:7px;background:var(--chibo);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.logo-text{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden}
+.logo-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.sidebar.collapsed .logo-text,.sidebar.collapsed .logo-sub{display:none}
+
+/* DEPT TABS — 部署タブ */
+.dept-tabs{padding:10px 10px 4px;border-bottom:1px solid var(--border);flex-shrink:0}
+.dept-label{font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase;padding:0 2px}
+.sidebar.collapsed .dept-label{visibility:hidden}
+.dept-tab{
+  display:flex;align-items:center;gap:8px;
+  width:100%;padding:7px 8px;border:none;background:none;
+  border-radius:var(--rs);cursor:pointer;font-size:12px;
+  color:var(--text2);text-align:left;transition:all .15s;
+  white-space:nowrap;overflow:hidden;margin-bottom:2px;
+}
+.dept-tab:hover{background:var(--surface2);color:var(--text1)}
+.dept-tab.active{font-weight:600;color:#fff}
+.dept-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sidebar.collapsed .dept-tab span:last-child{display:none}
+
+/* VIEW NAV */
+.nav-section{padding:8px 10px 4px}
+.nav-label{font-size:10px;color:var(--text3);padding:0 2px;margin-bottom:4px;letter-spacing:.05em;text-transform:uppercase}
+.sidebar.collapsed .nav-label{visibility:hidden}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--rs);cursor:pointer;color:var(--text2);font-size:12px;transition:all .15s;white-space:nowrap;overflow:hidden;border:none;background:none;width:100%;text-align:left;margin-bottom:1px}
+.nav-item:hover{background:var(--surface2);color:var(--text1)}
+.nav-item.active{background:var(--blue-l);color:var(--blue);font-weight:500}
+.nav-icon{font-size:16px;flex-shrink:0;width:18px;text-align:center}
+.sidebar.collapsed .nav-item span:last-child{display:none}
+
+/* FILTER */
+.filter-section{padding:10px 10px 8px;border-top:1px solid var(--border);margin-top:auto;flex-shrink:0}
+.sidebar.collapsed .filter-section{display:none}
+.filter-label{font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.filter-row{margin-bottom:7px}
+.filter-row label{font-size:11px;color:var(--text2);display:block;margin-bottom:2px}
+.filter-row select{width:100%;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text1);cursor:pointer}
+
+.toggle-btn{position:absolute;top:16px;right:-11px;width:22px;height:22px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:var(--text2);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.sb-wrap{position:relative;display:flex}
+
+/* DEPT BANNER */
+.dept-banner{border-radius:var(--r);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px}
+.dept-banner-icon{font-size:24px}
+.dept-banner-name{font-size:16px;font-weight:700;color:#fff}
+.dept-banner-sub{font-size:11px;color:rgba(255,255,255,.75);margin-top:2px}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:18px;font-weight:600;color:var(--text1)}
+.page-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.topbar-right{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.chip{font-size:11px;padding:3px 10px;border-radius:99px;background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.chip.on{background:var(--blue-l);color:var(--blue);border-color:rgba(26,111,196,.2)}
+.month-range{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text2)}
+.month-range select{font-size:11px;padding:4px 7px;border:1px solid var(--border2);border-radius:var(--rs)}
+
+/* METRICS */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.metric-label{font-size:10px;color:var(--text3);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.metric-value{font-size:24px;font-weight:600;color:var(--text1);line-height:1.1}
+.metric-sub{font-size:11px;margin-top:4px;display:flex;align-items:center;gap:4px}
+.dbadge{font-size:11px;padding:2px 6px;border-radius:99px;font-weight:500}
+.dbadge.up{background:var(--green-l);color:var(--green)}
+.dbadge.dn{background:var(--red-l);color:var(--red)}
+.dbadge.neu{background:var(--surface2);color:var(--text3)}
+
+/* SECTION */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.row21{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+.row1{margin-bottom:14px}
+@media(max-width:860px){.row2,.row21{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.ctitle{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.ctitle-l{display:flex;align-items:center;gap:6px}
+
+/* TABLE */
+.dtable{width:100%;border-collapse:collapse;font-size:12px}
+.dtable th{padding:6px 9px;text-align:left;color:var(--text3);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap;font-size:11px}
+.dtable td{padding:7px 9px;border-bottom:1px solid var(--border);color:var(--text1);white-space:nowrap}
+.dtable tbody tr:last-child td{border-bottom:none}
+.dtable tbody tr:hover{background:var(--surface2)}
+.dtable .num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{font-size:11px;padding:2px 7px;border-radius:99px;font-weight:500}
+.p-blue{background:var(--blue-l);color:var(--blue)}
+.p-green{background:var(--green-l);color:var(--green)}
+.p-red{background:var(--red-l);color:var(--red)}
+.p-amber{background:var(--amber-l);color:var(--amber)}
+.p-gray{background:var(--surface2);color:var(--text2)}
+.p-purple{background:var(--purple-l);color:var(--purple)}
+.p-teal{background:var(--teal-l);color:var(--teal)}
+
+/* BAR */
+.bwrap{display:flex;align-items:center;gap:7px}
+.btrack{flex:1;height:5px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.bfill{height:100%;border-radius:3px}
+
+/* CROSS */
+.cross-wrap{overflow-x:auto}
+.ctable{width:100%;border-collapse:collapse;font-size:11px}
+.ctable th,.ctable td{padding:6px 10px;border:1px solid var(--border);white-space:nowrap}
+.ctable th{background:var(--surface2);font-weight:500;color:var(--text2)}
+.ctable .total-col{background:var(--surface2);font-weight:500}
+.hcell{text-align:right;font-variant-numeric:tabular-nums}
+
+/* SEG */
+.seg{display:flex;background:var(--surface2);border-radius:var(--rs);padding:2px}
+.sbtn{padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;border:none;background:none;color:var(--text2);transition:all .15s}
+.sbtn.active{background:var(--surface);color:var(--text1);font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+/* STORE SCORECARD */
+.store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
+.store-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:box-shadow .15s}
+.store-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.store-card-name{font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text1)}
+.store-card-uri{font-size:18px;font-weight:700;color:var(--text1)}
+.store-card-meta{display:flex;gap:6px;margin-top:5px;align-items:center}
+
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text2);z-index:100}
+.spinner{width:22px;height:22px;border:2px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:36px;color:var(--text3);font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="sb-wrap">
+    <div class="sidebar" id="sidebar">
+
+      <div class="sb-header">
+        <div class="logo-mark">千</div>
+        <div>
+          <div class="logo-text">千房HD</div>
+          <div class="logo-sub">売上ダッシュボード</div>
+        </div>
+      </div>
+
+      <!-- 部署タブ -->
+      <div class="dept-tabs">
+        <div class="dept-label">部署</div>
+        <button class="dept-tab active" id="dt-all" onclick="switchDept('all',this)" style="background:#444;color:#fff">
+          <div class="dept-dot" style="background:#aaa"></div><span>全社</span>
+        </button>
+        <button class="dept-tab" id="dt-eigyo" onclick="switchDept('eigyo',this)">
+          <div class="dept-dot" style="background:#1a6fc4"></div><span>営業本部</span>
+        </button>
+        <button class="dept-tab" id="dt-fc" onclick="switchDept('fc',this)">
+          <div class="dept-dot" style="background:#9a6108"></div><span>FC</span>
+        </button>
+        <button class="dept-tab" id="dt-izakaya" onclick="switchDept('izakaya',this)">
+          <div class="dept-dot" style="background:#c0392b"></div><span>IZAKAYA</span>
+        </button>
+        <button class="dept-tab" id="dt-oden" onclick="switchDept('oden',this)">
+          <div class="dept-dot" style="background:#5c47b8"></div><span>ODEN</span>
+        </button>
+        <button class="dept-tab" id="dt-global" onclick="switchDept('global',this)">
+          <div class="dept-dot" style="background:#0e8c99"></div><span>グローバル</span>
+        </button>
+      </div>
+
+      <!-- ビュー -->
+      <div class="nav-section">
+        <div class="nav-label">ビュー</div>
+        <button class="nav-item active" onclick="switchView('overview',this)"><span class="nav-icon">📊</span><span>概要</span></button>
+        <button class="nav-item" onclick="switchView('stores',this)"><span class="nav-icon">🏪</span><span>店舗一覧</span></button>
+        <button class="nav-item" onclick="switchView('trend',this)"><span class="nav-icon">📈</span><span>月次推移</span></button>
+        <button class="nav-item" onclick="switchView('budget',this)"><span class="nav-icon">🎯</span><span>予算達成</span></button>
+        <button class="nav-item" onclick="switchView('cross',this)"><span class="nav-icon">🔀</span><span>クロス分析</span></button>
+      </div>
+
+      <!-- フィルタ -->
+      <div class="filter-section">
+        <div class="filter-label">絞り込み</div>
+        <div class="filter-row">
+          <label>地方区分</label>
+          <select id="f-area" onchange="applyFilters()">
+            <option value="">すべて</option>
+            <option value="近畿">近畿</option>
+            <option value="関東">関東</option>
+            <option value="中部">中部</option>
+            <option value="東北">東北</option>
+            <option value="中国">中国</option>
+            <option value="四国">四国</option>
+            <option value="北海道">北海道</option>
+            <option value="アジア">アジア</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="toggle-btn" id="toggle-btn" onclick="toggleSidebar()">◀</button>
+  </div>
+
+  <main class="main">
+    <!-- DEPT BANNER -->
+    <div class="dept-banner" id="dept-banner" style="background:#2c2c2a">
+      <div class="dept-banner-icon" id="banner-icon">🏢</div>
+      <div>
+        <div class="dept-banner-name" id="banner-name">全社</div>
+        <div class="dept-banner-sub" id="banner-sub">千房ホールディングス 全部署</div>
+      </div>
+    </div>
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="page-title">概要</div>
+        <div class="page-sub" id="page-sub">—</div>
+      </div>
+      <div class="topbar-right">
+        <div class="month-range">
+          <span>期間</span>
+          <select id="m-from" onchange="applyFilters()"></select>
+          <span>〜</span>
+          <select id="m-to" onchange="applyFilters()"></select>
+        </div>
+        <div class="chip" id="chip-area" style="display:none"></div>
+        <div class="chip" id="gas-status" style="font-size:10px;color:var(--text3)">● スタティックデータ</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid" id="metrics-row"></div>
+
+    <div id="view-overview"></div>
+    <div id="view-stores" style="display:none"></div>
+    <div id="view-trend" style="display:none"></div>
+    <div id="view-budget" style="display:none"></div>
+    <div id="view-cross" style="display:none"></div>
+  </main>
+</div>
+
+<div class="loading-overlay" id="loading"><div class="spinner"></div>読み込み中...</div>
+
+<script>
+// ===== DATA =====
+// ============================================================
+// GAS連携設定 — デプロイ後にURLを書き換えてください
+// ============================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw0kqIvH8Ed8-mtBP89DdCpJy7IWS3eS-G4ecMvGcYRu1xxIgKMNoDCNcgJ74v_ivMN/exec';
+
+// フォールバック用スタティックデータ（GAS未設定時に使用）
+const ALL_DATA = [
+  // 営業本部 直営
+  {年月:'2026-04',店舗名:'千日前本店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':17786197,'前年売上(千円)':18166887,'予算(千円)':19000000,客数:7437,前年客数:7884},
+  {年月:'2026-04',店舗名:'リノアス八尾支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':5395076,'前年売上(千円)':5632876,'予算(千円)':5600000,客数:2814,前年客数:2995},
+  {年月:'2026-04',店舗名:'京都アバンティ支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'京都府',店舗区分:'直営','売上(千円)':7845882,'前年売上(千円)':9155482,'予算(千円)':9200000,客数:3232,前年客数:4017},
+  {年月:'2026-04',店舗名:'堺東支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6748884,'前年売上(千円)':8906970,'予算(千円)':6250000,客数:3463,前年客数:4652},
+  {年月:'2026-04',店舗名:'高槻阪急スクエア支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6538722,'前年売上(千円)':6599380,'予算(千円)':6500000,客数:3515,前年客数:3696},
+  {年月:'2026-04',店舗名:'曽根崎支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6328307,'前年売上(千円)':8302804,'予算(千円)':8500000,客数:2121,前年客数:2848},
+  {年月:'2026-04',店舗名:'華 恵比寿ガーデンプレイス店',営業部:'営業本部',業態:'エレガンス',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':10427973,'前年売上(千円)':10696477,'予算(千円)':11000000,客数:1639,前年客数:1771},
+  {年月:'2026-04',店舗名:'京橋京阪モール支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':5444662,'前年売上(千円)':5959725,'予算(千円)':6000000,客数:2784,前年客数:3041},
+  {年月:'2026-04',店舗名:'ハービスPLAZA梅田支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6604878,'前年売上(千円)':7329421,'予算(千円)':7200000,客数:2853,前年客数:3314},
+  {年月:'2026-04',店舗名:'有楽町ビックカメラ支店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':9692437,'前年売上(千円)':10274860,'予算(千円)':10000000,客数:3615,前年客数:3929},
+  {年月:'2026-04',店舗名:'そごう横浜店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'神奈川県',店舗区分:'直営','売上(千円)':7847069,'前年売上(千円)':8559205,'予算(千円)':8500000,客数:3351,前年客数:3650},
+  {年月:'2026-04',店舗名:'ルミネ立川支店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':6330659,'前年売上(千円)':6232411,'予算(千円)':6500000,客数:3093,前年客数:3078},
+  {年月:'2026-04',店舗名:'あべのキューズモール支店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':7464290,'前年売上(千円)':7956514,'予算(千円)':8000000,客数:4077,前年客数:4453},
+  {年月:'2026-04',店舗名:'ヨドバシHD池袋ビル支店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':4700674,'前年売上(千円)':4569229,'予算(千円)':6300000,客数:2221,前年客数:2156},
+  {年月:'2026-04',店舗名:'名代JO-TERRACE OSAKA店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6247915,'前年売上(千円)':6444199,'予算(千円)':6800000,客数:3194,前年客数:3556},
+  {年月:'2026-04',店舗名:'セレオ八王子支店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':4377907,'前年売上(千円)':4046495,'予算(千円)':4500000,客数:2261,前年客数:2143},
+  {年月:'2026-04',店舗名:'ららぽーと名古屋みなとアクルス店',営業部:'営業本部',業態:'ベーシック',地方区分:'中部',都道府県:'愛知県',店舗区分:'直営','売上(千円)':6539681,'前年売上(千円)':6720793,'予算(千円)':6500000,客数:3914,前年客数:4089},
+  {年月:'2026-04',店舗名:'舞 イクスピアリ店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'千葉県',店舗区分:'直営','売上(千円)':12216098,'前年売上(千円)':11159142,'予算(千円)':12000000,客数:5702,前年客数:5542},
+  {年月:'2026-04',店舗名:'有明ガーデン支店',営業部:'営業本部',業態:'ベーシック',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':9865658,'前年売上(千円)':9360820,'予算(千円)':9500000,客数:4490,前年客数:4304},
+  {年月:'2026-04',店舗名:'イオンモール各務原インター支店',営業部:'営業本部',業態:'ベーシック',地方区分:'中部',都道府県:'岐阜県',店舗区分:'直営','売上(千円)':3007508,'前年売上(千円)':3275194,'予算(千円)':3500000,客数:2053,前年客数:2243},
+  {年月:'2026-04',店舗名:'ぷれじでんと南本店',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':6179762,'前年売上(千円)':8086942,'予算(千円)':8000000,客数:592,前年客数:735},
+  {年月:'2026-04',店舗名:'ぷれじでんと北店',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':9434241,'前年売上(千円)':9923857,'予算(千円)':10000000,客数:777,前年客数:806},
+  {年月:'2026-04',店舗名:'ぷれじでんとシェラトン都ホテル大阪店',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':12383756,'前年売上(千円)':12943438,'予算(千円)':13500000,客数:1576,前年客数:1708},
+  {年月:'2026-04',店舗名:'ぷれじでんとOH日航ビル店',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':9358924,'前年売上(千円)':9987414,'予算(千円)':10000000,客数:1179,前年客数:1125},
+  {年月:'2026-04',店舗名:'ぷれじでんと大丸心斎橋店',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':14300432,'前年売上(千円)':15285182,'予算(千円)':16000000,客数:2049,前年客数:2124},
+  {年月:'2026-04',店舗名:'琥 虎ノ門',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'関東',都道府県:'東京都',店舗区分:'直営','売上(千円)':5481374,'前年売上(千円)':6425725,'予算(千円)':7500000,客数:329,前年客数:371},
+  {年月:'2026-04',店舗名:'ぷれじでんとRetreat',営業部:'営業本部',業態:'ぷれじでんと',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':2120873,'前年売上(千円)':2167649,'予算(千円)':2300000,客数:135,前年客数:175},
+  {年月:'2026-04',店舗名:'道頓堀ビル店',営業部:'営業本部',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':48895564,'前年売上(千円)':56695945,'予算(千円)':57000000,客数:19919,前年客数:24942},
+  {年月:'2026-04',店舗名:"Chibo's Kitchen ららぽーと甲子園店",営業部:'営業本部',業態:'フードコート',地方区分:'近畿',都道府県:'兵庫県',店舗区分:'直営','売上(千円)':4117968,'前年売上(千円)':4540591,'予算(千円)':5000000,客数:3989},
+  // ODEN
+  {年月:'2026-04',店舗名:'すみ吉 心斎橋',営業部:'ODEN',業態:'おでん',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':2690223,'前年売上(千円)':3217800,'予算(千円)':3320000,客数:356,前年客数:357},
+  // IZAKAYA
+  {年月:'2026-04',店舗名:'いやさか 福島本店',営業部:'IZAKAYA',業態:'居酒屋',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':9195648,'前年売上(千円)':9855184,'予算(千円)':9500000,客数:2389,前年客数:2572},
+  {年月:'2026-04',店舗名:'ときわ福島',営業部:'IZAKAYA',業態:'居酒屋',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':2802157,'前年売上(千円)':2971050,'予算(千円)':3000000,客数:726,前年客数:784},
+  {年月:'2026-04',店舗名:'いやさか別邸',営業部:'IZAKAYA',業態:'居酒屋',地方区分:'近畿',都道府県:'大阪府',店舗区分:'直営','売上(千円)':26197,'前年売上(千円)':41482,'予算(千円)':50000,客数:16,前年客数:22},
+  // FC
+  {年月:'2026-04',店舗名:'阪急服部店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'FC','売上(千円)':2628387,'前年売上(千円)':2789817,'予算(千円)':2716689,客数:1374,前年客数:1383},
+  {年月:'2026-04',店舗名:'金剛店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'FC','売上(千円)':3122085,'前年売上(千円)':2786203,'予算(千円)':2938493,客数:1638,前年客数:1505},
+  {年月:'2026-04',店舗名:'高知野市店',営業部:'FC',業態:'ベーシック',地方区分:'四国',都道府県:'高知県',店舗区分:'FC','売上(千円)':791925,'前年売上(千円)':643666,'予算(千円)':697719,客数:425,前年客数:375},
+  {年月:'2026-04',店舗名:'岡山大安寺店',営業部:'FC',業態:'ベーシック',地方区分:'中国',都道府県:'岡山県',店舗区分:'FC','売上(千円)':3956952,'前年売上(千円)':3738118,'予算(千円)':3811703,客数:2739,前年客数:3050},
+  {年月:'2026-04',店舗名:'高知南国店',営業部:'FC',業態:'ベーシック',地方区分:'四国',都道府県:'高知県',店舗区分:'FC','売上(千円)':2441605,'前年売上(千円)':2348194,'予算(千円)':2499081,客数:1690,前年客数:1991},
+  {年月:'2026-04',店舗名:'高松レインボー店',営業部:'FC',業態:'ベーシック',地方区分:'四国',都道府県:'香川県',店舗区分:'FC','売上(千円)':4283271,'前年売上(千円)':3627758,'予算(千円)':3946719,客数:2718,前年客数:2453},
+  {年月:'2026-04',店舗名:'札幌アスティ45店',営業部:'FC',業態:'ベーシック',地方区分:'北海道',都道府県:'北海道',店舗区分:'FC','売上(千円)':4014507,'前年売上(千円)':4365730,'予算(千円)':4202254,客数:2288,前年客数:2484},
+  {年月:'2026-04',店舗名:'丸太町七本松店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'京都府',店舗区分:'FC','売上(千円)':838572,'前年売上(千円)':1016621,'予算(千円)':995000,客数:468,前年客数:590},
+  {年月:'2026-04',店舗名:'橋本高野口店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'和歌山県',店舗区分:'FC','売上(千円)':3644262,'前年売上(千円)':3379654,'予算(千円)':3400000,客数:2515,前年客数:2268},
+  {年月:'2026-04',店舗名:'仙台一番町店',営業部:'FC',業態:'ベーシック',地方区分:'東北',都道府県:'宮城県',店舗区分:'FC','売上(千円)':2967202,'前年売上(千円)':3051018,'予算(千円)':3115299,客数:1186,前年客数:1362},
+  {年月:'2026-04',店舗名:'広島パセーラ店',営業部:'FC',業態:'ベーシック',地方区分:'中国',都道府県:'広島県',店舗区分:'FC','売上(千円)':3445935,'前年売上(千円)':2649321,'予算(千円)':2664970,客数:2289,前年客数:1725},
+  {年月:'2026-04',店舗名:'静岡パルシェ店',営業部:'FC',業態:'ベーシック',地方区分:'中部',都道府県:'静岡県',店舗区分:'FC','売上(千円)':4618892,'前年売上(千円)':4051927,'予算(千円)':4144697,客数:2288,前年客数:2153},
+  {年月:'2026-04',店舗名:'江坂店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'FC','売上(千円)':2575831,'前年売上(千円)':2888843,'予算(千円)':2800000,客数:1240,前年客数:1445},
+  {年月:'2026-04',店舗名:'ザ・モール仙台長町店',営業部:'FC',業態:'ベーシック',地方区分:'東北',都道府県:'宮城県',店舗区分:'FC','売上(千円)':3005414,'前年売上(千円)':3028163,'予算(千円)':3179793,客数:1813,前年客数:1841},
+  {年月:'2026-04',店舗名:'ADVANCE 広尾店',営業部:'FC',業態:'エレガンス',地方区分:'関東',都道府県:'東京都',店舗区分:'FC','売上(千円)':8159710,'前年売上(千円)':6818759,'予算(千円)':7147542,客数:483,前年客数:506},
+  {年月:'2026-04',店舗名:'イオンモール白山店',営業部:'FC',業態:'ベーシック',地方区分:'中部',都道府県:'石川県',店舗区分:'FC','売上(千円)':3875760,'前年売上(千円)':3614492,'予算(千円)':3864638,客数:2699,前年客数:2610},
+  {年月:'2026-04',店舗名:'京都祇園店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'京都府',店舗区分:'FC','売上(千円)':4791376,'前年売上(千円)':7208415,'予算(千円)':6000000,客数:2059,前年客数:3141},
+  {年月:'2026-04',店舗名:'せんちゅうパル店',営業部:'FC',業態:'ベーシック',地方区分:'近畿',都道府県:'大阪府',店舗区分:'FC','売上(千円)':5026207,'前年売上(千円)':5718802,'予算(千円)':5402588,客数:2866,前年客数:3564},
+  {年月:'2026-04',店舗名:'北新地',営業部:'FC',業態:'エレガンス',地方区分:'近畿',都道府県:'大阪府',店舗区分:'FC','売上(千円)':3968885,'前年売上(千円)':3284068,'予算(千円)':5000000,客数:534,前年客数:278},
+  // グローバル
+  {年月:'2026-04',店舗名:'ハノイキンマ店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Vietnam',店舗区分:'直営','売上(千円)':4195567,'前年売上(千円)':null,'予算(千円)':4000000,客数:1965,前年客数:0},
+  {年月:'2026-04',店舗名:'チュンホアニャンチン店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Vietnam',店舗区分:'直営','売上(千円)':2722778,'前年売上(千円)':4294566,'予算(千円)':3000000,客数:1273,前年客数:2008},
+  {年月:'2026-04',店舗名:'高雄漢神アリーナ店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Taiwan',店舗区分:'直営','売上(千円)':5938514,'前年売上(千円)':6244043,'予算(千円)':8481207,客数:2727,前年客数:2867},
+  {年月:'2026-04',店舗名:'台中漢神インターコンチネンタル店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Taiwan',店舗区分:'直営','売上(千円)':11728000,'前年売上(千円)':null,'予算(千円)':5996388,客数:2198,前年客数:0},
+  {年月:'2026-04',店舗名:'寧波阪急店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'China',店舗区分:'直営','売上(千円)':9797514,'前年売上(千円)':7975778,'予算(千円)':9200000,客数:2840,前年客数:2312},
+  {年月:'2026-04',店舗名:'Mitsukoshi BGC店',営業部:'グローバル',業態:'フードコート',地方区分:'アジア',都道府県:'Philippines',店舗区分:'直営','売上(千円)':1713575,'前年売上(千円)':2465349,'予算(千円)':1700000,客数:1713,前年客数:2465},
+  {年月:'2026-04',店舗名:'江南新沙店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Korea',店舗区分:'直営','売上(千円)':6666774,'前年売上(千円)':7802760,'予算(千円)':7500000,客数:3345,前年客数:3915},
+  {年月:'2026-04',店舗名:'龍山三角地店',営業部:'グローバル',業態:'ベーシック',地方区分:'アジア',都道府県:'Korea',店舗区分:'直営','売上(千円)':2995428,'前年売上(千円)':null,'予算(千円)':4000000,客数:1098,前年客数:0},
+];
+
+// ===== DEPT CONFIG =====
+const DEPTS = {
+  all:     {label:'全社',        icon:'🏢', bg:'#2c2c2a', filter:null,          color:'#888'},
+  eigyo:   {label:'営業本部',    icon:'🍽️', bg:'#1a4a8a', filter:'営業本部',    color:'#1a6fc4'},
+  fc:      {label:'FC',          icon:'🤝', bg:'#6b4200', filter:'FC',           color:'#9a6108'},
+  izakaya: {label:'IZAKAYA',     icon:'🍶', bg:'#7a1a1a', filter:'IZAKAYA',      color:'#c0392b'},
+  oden:    {label:'ODEN',        icon:'🍢', bg:'#3a2a7a', filter:'ODEN',         color:'#5c47b8'},
+  global:  {label:'グローバル',  icon:'🌏', bg:'#0a5560', filter:'グローバル',   color:'#0e8c99'},
+};
+
+// ===== STATE =====
+let allData = [];
+let filtered = [];
+let allMonths = [];
+let charts = {};
+let currentView = 'overview';
+let currentDept = 'all';
+let sbCollapsed = false;
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => {
+  if (GAS_URL && GAS_URL !== 'YOUR_GAS_WEB_APP_URL') {
+    loadFromGAS();
+  } else {
+    // GAS未設定: スタティックデータで起動
+    allData = ALL_DATA;
+    initDashboard();
+  }
+});
+
+function loadFromGAS() {
+  const cbName = 'gasCallback_' + Date.now();
+  const script = document.createElement('script');
+  script.src = GAS_URL + '?callback=' + cbName;
+  script.onerror = () => {
+    console.warn('GAS fetch failed, falling back to static data');
+    allData = ALL_DATA;
+    initDashboard();
+    document.getElementById('loading').style.display = 'none';
+  };
+  window[cbName] = (res) => {
+    if (res && res.status === 'ok' && res.data) {
+      allData = res.data;
+      document.getElementById('gas-status').textContent = '● GAS接続中 ' + res.count + '件';
+      document.getElementById('gas-status').style.color = '#1a7a54';
+    } else {
+      console.warn('GAS error, using static data:', res && res.error);
+      allData = ALL_DATA;
+      document.getElementById('gas-status').textContent = '● スタティックデータ';
+      document.getElementById('gas-status').style.color = '#9a6108';
+    }
+    initDashboard();
+    document.getElementById('loading').style.display = 'none';
+    delete window[cbName];
+  };
+  document.head.appendChild(script);
+}
+
+// 年月フィールドを YYYY-MM 形式に正規化
+function normalizeNengetsu(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+  const slash = s.match(/^(\d{4})\/(\d{2})/);
+  if (slash) return `${slash[1]}-${slash[2]}`;
+  return s;
+}
+
+function initDashboard() {
+  allData = allData.map(d => ({
+    ...d,
+    '\u5e74\u6708': normalizeNengetsu(d['\u5e74\u6708'])
+  })).filter(d => d['\u5e74\u6708']);
+  allMonths = [...new Set(allData.map(d=>d['\u5e74\u6708']))].sort();
+  buildMonthSelectors();
+  applyFilters();
+  document.getElementById('loading').style.display = 'none';
+}
+
+function buildMonthSelectors() {
+  ['m-from','m-to'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    allMonths.forEach(m => el.innerHTML += `<option value="${m}" ${i===1?'selected':''}>${m}</option>`);
+  });
+}
+
+function toggleSidebar() {
+  sbCollapsed = !sbCollapsed;
+  document.getElementById('sidebar').classList.toggle('collapsed', sbCollapsed);
+  document.getElementById('toggle-btn').textContent = sbCollapsed ? '▶' : '◀';
+}
+
+// ===== DEPT SWITCH =====
+function switchDept(deptKey, btn) {
+  currentDept = deptKey;
+  const d = DEPTS[deptKey];
+
+  // バナー更新
+  document.getElementById('dept-banner').style.background = d.bg;
+  document.getElementById('banner-icon').textContent = d.icon;
+  document.getElementById('banner-name').textContent = d.label;
+  const subs = {all:'千房ホールディングス 全部署',eigyo:'直営店舗 千房・ぷれじでんと',fc:'フランチャイズ加盟店',izakaya:'いやさか・ときわ',oden:'すみ吉 心斎橋',global:'海外店舗 Vietnam / Taiwan / China / Korea / Philippines'};
+  document.getElementById('banner-sub').textContent = subs[deptKey];
+
+  // ボタンスタイル更新
+  document.querySelectorAll('.dept-tab').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
+  });
+  btn.classList.add('active');
+  btn.style.background = d.bg;
+  btn.style.color = '#fff';
+
+  applyFilters();
+}
+
+// ===== VIEW SWITCH =====
+function switchView(name, btn) {
+  currentView = name;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  btn.classList.add('active');
+  const titles = {overview:'概要',stores:'店舗一覧',trend:'月次推移',budget:'予算達成',cross:'クロス分析'};
+  document.getElementById('page-title').textContent = titles[name];
+  ['overview','stores','trend','budget','cross'].forEach(v =>
+    document.getElementById('view-'+v).style.display = v===name?'block':'none'
+  );
+  renderView();
+}
+
+// ===== FILTERS =====
+function applyFilters() {
+  const area  = document.getElementById('f-area').value;
+  const mFrom = document.getElementById('m-from').value;
+  const mTo   = document.getElementById('m-to').value;
+  const dept  = DEPTS[currentDept];
+
+  filtered = allData.filter(d =>
+    (!area  || d['地方区分'] === area) &&
+    (!mFrom || d['年月'] >= mFrom) &&
+    (!mTo   || d['年月'] <= mTo) &&
+    (!dept.filter || d['営業部'] === dept.filter)
+  );
+
+  const chipArea = document.getElementById('chip-area');
+  chipArea.style.display = area ? 'block' : 'none';
+  chipArea.textContent = area;
+  chipArea.className = area ? 'chip on' : 'chip';
+
+  const cnt = new Set(filtered.map(d=>d['店舗名'])).size;
+  const period = mFrom===mTo ? mFrom : `${mFrom} 〜 ${mTo}`;
+  document.getElementById('page-sub').textContent = `${period} ／ ${cnt}店舗`;
+
+  renderMetrics();
+  renderView();
+}
+
+// ===== METRICS =====
+function fmtM(n) { return n==null?'―':'¥'+Math.round(n/1000).toLocaleString()+'千円'; }
+function pctStr(a,b){ return a&&b?((a/b-1)*100).toFixed(1):null; }
+function dc(v){ return v==null?'neu':parseFloat(v)>=0?'up':'dn'; }
+
+function renderMetrics() {
+  const uri   = filtered.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+  const upy   = filtered.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+  const ubgt  = filtered.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+  const uky   = filtered.reduce((s,d)=>s+(d['客数']||0),0);
+  const ukpy  = filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
+  const yoy   = pctStr(uri,upy);
+  const kyYoy = pctStr(uky,ukpy);
+  const bgt   = ubgt?((uri/ubgt)*100).toFixed(1):null;
+  const tanka   = uky ?Math.round(uri/uky):0;
+  const tankapy = ukpy?Math.round(upy/ukpy):0;
+  const tankaYoy= tankapy?pctStr(tanka,tankapy):null;
+  const cnt = new Set(filtered.map(d=>d['店舗名'])).size;
+
+  const bdg=(v)=>v!=null?`<span class="dbadge ${dc(v)}">${parseFloat(v)>=0?'+':''}${v}%</span>`:`<span class="dbadge neu">前年比―</span>`;
+
+  document.getElementById('metrics-row').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label">売上</div>
+      <div class="metric-value">${fmtM(uri)}</div>
+      <div class="metric-sub">${bdg(yoy)}<span style="color:var(--text3)">前年 ${fmtM(upy)}</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">予算達成率</div>
+      <div class="metric-value">${bgt!=null?bgt+'%':'―'}</div>
+      <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(ubgt)}</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">客数</div>
+      <div class="metric-value">${uky.toLocaleString()}人</div>
+      <div class="metric-sub">${bdg(kyYoy)}<span style="color:var(--text3)">前年 ${ukpy.toLocaleString()}人</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">客単価</div>
+      <div class="metric-value">¥${tanka.toLocaleString()}</div>
+      <div class="metric-sub">${bdg(tankaYoy)}<span style="color:var(--text3)">前年 ¥${tankapy.toLocaleString()}</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">対象店舗数</div>
+      <div class="metric-value">${cnt}店</div>
+      <div class="metric-sub"><span style="color:var(--text3)">${filtered.length}レコード</span></div>
+    </div>
+  `;
+}
+
+// ===== VIEWS =====
+function renderView() {
+  Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});
+  charts={};
+  if(currentView==='overview') renderOverview();
+  else if(currentView==='stores') renderStores();
+  else if(currentView==='trend') renderTrend();
+  else if(currentView==='budget') renderBudget();
+  else if(currentView==='cross') renderCross();
+}
+
+// ---- OVERVIEW ----
+const GCOLS={'ベーシック':'#1a6fc4','ぷれじでんと':'#c0392b','エレガンス':'#5c47b8','フードコート':'#1a7a54','居酒屋':'#c0392b','おでん':'#8040b0'};
+function col(g){return GCOLS[g]||'#888'}
+
+function renderOverview() {
+  const el = document.getElementById('view-overview');
+  const byG = gsum(filtered,'業態');
+  const gL  = Object.keys(byG).sort((a,b)=>byG[b].uri-byG[a].uri);
+
+  // 地方区分別 (グローバルは国別)
+  const isGlobal = currentDept==='global';
+  const areaKey  = isGlobal ? '都道府県' : '地方区分';
+  const byA = gsum(filtered, areaKey);
+  const aL  = Object.keys(byA).sort((a,b)=>byA[b].uri-byA[a].uri);
+  const ACOLS = ['#1a6fc4','#c0392b','#1a7a54','#9a6108','#5c47b8','#0e8c99','#888780','#e67e22'];
+
+  const withYoy = filtered.filter(d=>d['前年売上(千円)']&&d['前年売上(千円)']>0)
+    .map(d=>({...d, yoy:d['売上(千円)']/d['前年売上(千円)']-1}));
+  const best5  = [...withYoy].sort((a,b)=>b.yoy-a.yoy).slice(0,5);
+  const worst5 = [...withYoy].sort((a,b)=>a.yoy-b.yoy).slice(0,5);
+
+  // 部署ごとのデフォルト軸設定
+  const deptCrossDefaults = {
+    all:     {row:'業態',     col:'地方区分', metric:'uri'},
+    eigyo:   {row:'業態',     col:'地方区分', metric:'uri'},
+    fc:      {row:'地方区分', col:'業態',     metric:'uri'},
+    izakaya: {row:'店舗名',   col:'年月',     metric:'uri'},
+    oden:    {row:'店舗名',   col:'年月',     metric:'uri'},
+    global:  {row:'都道府県', col:'業態',     metric:'uri'},
+  };
+  const cdef = deptCrossDefaults[currentDept]||deptCrossDefaults.all;
+
+  el.innerHTML = `
+    <div class="row21">
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">業態別売上（今期 vs 前年）</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          ${gL.map(g=>`<span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2)"><span style="width:9px;height:9px;border-radius:2px;background:${col(g)};display:inline-block"></span>${g}</span>`).join('')}
+        </div>
+        <div style="position:relative;height:210px"><canvas id="c-gyotai" role="img" aria-label="業態別売上">業態別</canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">${isGlobal?'国別':'地方区分別'}構成</div></div>
+        <div style="position:relative;height:210px"><canvas id="c-area" role="img" aria-label="地域別構成">地域別</canvas></div>
+        <div style="margin-top:10px">
+          ${aL.slice(0,5).map((a,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
+            <span style="width:8px;height:8px;border-radius:2px;background:${ACOLS[i]||'#888'};display:inline-block;flex-shrink:0"></span>
+            <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a}</span>
+            <span style="font-weight:500">${Math.round(byA[a].uri/1000).toLocaleString()}千円</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">🔺 前年比ベスト5</div></div>
+        ${yoyList(best5)}
+      </div>
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">🔻 前年比ワースト5</div></div>
+        ${yoyList(worst5)}
+      </div>
+    </div>
+
+    <!-- インラインクロス分析 -->
+    <div class="card" style="margin-bottom:0">
+      <div class="ctitle">
+        <div class="ctitle-l">🔀 クロス分析</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          ${mkSelOv('ov-row','行',  '業態,地方区分,店舗区分,都道府県,営業部,店舗名', cdef.row)}
+          ${mkSelOv('ov-col','列',  '地方区分,業態,店舗区分,年月,都道府県',         cdef.col)}
+          ${mkSelOv('ov-metric','指標','uri=売上（千円）,kyaku=客数,bgt=予算達成率(%),yoy=前年比(%)', cdef.metric)}
+        </div>
+      </div>
+      <div class="cross-wrap" id="ov-cross-res"></div>
+    </div>
+  `;
+
+  charts.gyotai = new Chart(document.getElementById('c-gyotai').getContext('2d'),{
+    type:'bar',
+    data:{labels:gL,datasets:[
+      {label:'今期',data:gL.map(g=>Math.round(byG[g].uri/1000)),backgroundColor:gL.map(g=>col(g))},
+      {label:'前年',data:gL.map(g=>Math.round(byG[g].upy/1000)),backgroundColor:gL.map(g=>col(g)+'44'),borderColor:gL.map(g=>col(g)),borderWidth:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
+  });
+
+  charts.area = new Chart(document.getElementById('c-area').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:aL,datasets:[{data:aL.map(a=>Math.round(byA[a].uri/1000)),backgroundColor:aL.map((_,i)=>ACOLS[i]||'#888')}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`¥${c.parsed.toLocaleString()}千円`}}}}
+  });
+
+  // インラインクロス分析セレクタにイベント付与＆初回描画
+  ['ov-row','ov-col','ov-metric'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.onchange=buildOvCross;
+  });
+  buildOvCross();
+}
+
+function yoyList(items) {
+  if(!items.length) return '<div class="empty">データなし</div>';
+  return items.map(d=>{
+    const v=(d.yoy*100).toFixed(1);
+    const c=parseFloat(v)>=0?'p-green':'p-red';
+    const kc=d['店舗区分']==='FC'?'p-amber':'p-blue';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:12px;font-weight:500">${d['店舗名']}</div>
+      <div style="font-size:11px;color:var(--text3)">${d['地方区分']}${d['都道府県']?'·'+d['都道府県']:''} <span class="pill ${kc}" style="font-size:10px">${d['店舗区分']}</span></div></div>
+      <span class="pill ${c}">${parseFloat(v)>=0?'+':''}${v}%</span>
+    </div>`;
+  }).join('');
+}
+
+// ---- STORES ----
+function renderStores() {
+  const el = document.getElementById('view-stores');
+  const sm = {};
+  filtered.forEach(d=>{
+    const k=d['店舗名'];
+    if(!sm[k]) sm[k]={name:k,kubun:d['店舗区分'],gyotai:d['業態'],area:d['地方区分'],kuni:d['都道府県'],uri:0,upy:0,bgt:0,ky:0};
+    sm[k].uri+=d['売上(千円)']||0; sm[k].upy+=d['前年売上(千円)']||0;
+    sm[k].bgt+=d['予算(千円)']||0; sm[k].ky+=d['客数']||0;
+  });
+  const stores=Object.values(sm).sort((a,b)=>b.uri-a.uri);
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="ctitle">
+        <div class="ctitle-l">店舗別一覧（${stores.length}店舗）</div>
+        <div class="seg">
+          <button class="sbtn active" onclick="sortStores('uri',this)">売上順</button>
+          <button class="sbtn" onclick="sortStores('yoy',this)">前年比順</button>
+          <button class="sbtn" onclick="sortStores('bgt',this)">予算比順</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="dtable" id="store-table">
+          <thead><tr>
+            <th>#</th><th>店舗名</th><th>区分</th><th>業態</th><th>地域</th>
+            <th class="num">売上（千円）</th><th class="num">前年比</th><th class="num">予算達成率</th><th class="num">客数</th>
+          </tr></thead>
+          <tbody id="store-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  window._stores = stores;
+  drawStoreRows(stores);
+}
+
+function drawStoreRows(stores) {
+  const tb=document.getElementById('store-tbody');
+  if(!tb) return;
+  tb.innerHTML = stores.map((s,i)=>{
+    const yoy=s.upy?pctStr(s.uri,s.upy):null;
+    const bgt=s.bgt?((s.uri/s.bgt)*100).toFixed(1):null;
+    const yc=yoy===null?'p-gray':parseFloat(yoy)>=0?'p-green':'p-red';
+    const bc=bgt===null?'p-gray':parseFloat(bgt)>=100?'p-green':'p-red';
+    const kc=s.kubun==='FC'?'p-amber':'p-blue';
+    return `<tr>
+      <td style="color:var(--text3)">${i+1}</td>
+      <td style="font-weight:500;max-width:150px;overflow:hidden;text-overflow:ellipsis">${s.name}</td>
+      <td><span class="pill ${kc}">${s.kubun}</span></td>
+      <td><span class="pill p-gray">${s.gyotai}</span></td>
+      <td style="color:var(--text2);font-size:11px">${s.kuni||s.area}</td>
+      <td class="num">${Math.round(s.uri/1000).toLocaleString()}</td>
+      <td class="num"><span class="pill ${yc}">${yoy!=null?(parseFloat(yoy)>=0?'+':'')+yoy+'%':'―'}</span></td>
+      <td class="num"><span class="pill ${bc}">${bgt!=null?bgt+'%':'―'}</span></td>
+      <td class="num">${s.ky.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sortStores(k, btn) {
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const s=[...(window._stores||[])];
+  if(k==='uri') s.sort((a,b)=>b.uri-a.uri);
+  else if(k==='yoy') s.sort((a,b)=>(b.upy?b.uri/b.upy:0)-(a.upy?a.uri/a.upy:0));
+  else s.sort((a,b)=>(b.bgt?b.uri/b.bgt:0)-(a.bgt?a.uri/a.bgt:0));
+  drawStoreRows(s);
+}
+
+// ---- TREND ----
+function renderTrend() {
+  const el = document.getElementById('view-trend');
+  const months = [...new Set(filtered.map(d=>d['年月']))].sort();
+  if(months.length<1){el.innerHTML='<div class="card"><div class="empty">月次データが1件のみです。複数月のデータ追加後に推移グラフが表示されます。</div></div>';return;}
+
+  const mt = months.map(m=>{
+    const r=filtered.filter(d=>d['年月']===m);
+    return{m,uri:r.reduce((s,d)=>s+(d['売上(千円)']||0),0),upy:r.reduce((s,d)=>s+(d['前年売上(千円)']||0),0),bgt:r.reduce((s,d)=>s+(d['予算(千円)']||0),0)};
+  });
+
+  // 業態別積み上げ
+  const gyotais=[...new Set(filtered.map(d=>d['業態']))];
+  const stackDs = gyotais.map(g=>({
+    label:g,
+    data:months.map(m=>Math.round(filtered.filter(d=>d['年月']===m&&d['業態']===g).reduce((s,d)=>s+(d['売上(千円)']||0),0)/1000)),
+    backgroundColor:col(g)
+  }));
+
+  const yoyD = mt.map(r=>r.upy?parseFloat(((r.uri/r.upy-1)*100).toFixed(1)):null);
+
+  el.innerHTML = `
+    <div class="row1">
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">月次売上推移（今期 / 前年 / 予算）</div></div>
+        <div style="display:flex;gap:14px;margin-bottom:8px;font-size:11px;color:var(--text2)">
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:12px;height:2px;background:#1a6fc4;display:inline-block"></span>今期</span>
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:12px;height:2px;background:#aaa;display:inline-block"></span>前年</span>
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:12px;height:2px;background:#f0b429;display:inline-block"></span>予算</span>
+        </div>
+        <div style="position:relative;height:230px"><canvas id="c-trend" role="img" aria-label="月次推移">月次</canvas></div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">業態別積み上げ</div></div>
+        <div style="position:relative;height:190px"><canvas id="c-stack" role="img" aria-label="業態積み上げ">積上</canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">前年比（月次）</div></div>
+        <div style="position:relative;height:190px"><canvas id="c-yoy" role="img" aria-label="前年比">前年比</canvas></div>
+      </div>
+    </div>
+  `;
+
+  charts.trend = new Chart(document.getElementById('c-trend').getContext('2d'),{
+    type:'line',
+    data:{labels:months,datasets:[
+      {label:'今期',data:mt.map(r=>Math.round(r.uri/1000)),borderColor:'#1a6fc4',backgroundColor:'rgba(26,111,196,.07)',fill:true,tension:.3,pointRadius:4},
+      {label:'前年',data:mt.map(r=>Math.round(r.upy/1000)),borderColor:'#bbb',borderDash:[4,4],tension:.3,fill:false,pointRadius:3},
+      {label:'予算',data:mt.map(r=>Math.round(r.bgt/1000)),borderColor:'#f0b429',borderDash:[2,2],tension:.3,fill:false,pointRadius:0},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
+  });
+
+  charts.stack = new Chart(document.getElementById('c-stack').getContext('2d'),{
+    type:'bar',
+    data:{labels:months,datasets:stackDs},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10}}}},scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:v=>`${v.toLocaleString()}千円`,font:{size:10}}}}}
+  });
+
+  charts.yoy = new Chart(document.getElementById('c-yoy').getContext('2d'),{
+    type:'bar',
+    data:{labels:months,datasets:[{data:yoyD,backgroundColor:yoyD.map(v=>v===null?'#ccc':v>=0?'#1a7a54':'#c0392b')}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%',font:{size:10}}},x:{grid:{display:false}}}}
+  });
+}
+
+// ---- BUDGET ----
+function renderBudget() {
+  const el = document.getElementById('view-budget');
+  const sm={};
+  filtered.forEach(d=>{
+    const k=d['店舗名'];
+    if(!sm[k]) sm[k]={name:k,kubun:d['店舗区分'],gyotai:d['業態'],uri:0,bgt:0};
+    sm[k].uri+=d['売上(千円)']||0; sm[k].bgt+=d['予算(千円)']||0;
+  });
+  const stores=Object.values(sm).filter(s=>s.bgt>0).sort((a,b)=>(b.uri/b.bgt)-(a.uri/a.bgt));
+  const rates=stores.map(s=>parseFloat(((s.uri/s.bgt)*100).toFixed(1)));
+  const achieved=stores.filter((_,i)=>rates[i]>=100).length;
+  const achRate=stores.length?Math.round(achieved/stores.length*100):0;
+
+  el.innerHTML = `
+    <div class="metrics-grid" style="margin-bottom:14px">
+      <div class="metric-card"><div class="metric-label">達成店舗数</div><div class="metric-value">${achieved}</div><div class="metric-sub" style="color:var(--text3)">${stores.length}店舗中</div></div>
+      <div class="metric-card"><div class="metric-label">達成率</div><div class="metric-value">${achRate}%</div></div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-l">予算達成率 全店舗</div></div>
+      <div style="overflow-x:auto">
+        <table class="dtable">
+          <thead><tr><th>店舗名</th><th>区分</th><th>業態</th><th class="num">達成率</th><th style="min-width:160px">バー</th><th class="num">売上（千円）</th><th class="num">予算（万円）</th></tr></thead>
+          <tbody>${stores.map((s,i)=>{
+            const r=rates[i];const c=r>=100?'#1a7a54':'#c0392b';const kc=s.kubun==='FC'?'p-amber':'p-blue';
+            return `<tr>
+              <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name}</td>
+              <td><span class="pill ${kc}">${s.kubun}</span></td>
+              <td><span class="pill p-gray" style="font-size:10px">${s.gyotai}</span></td>
+              <td class="num"><span style="font-weight:600;color:${c}">${r}%</span></td>
+              <td><div class="bwrap"><div class="btrack"><div class="bfill" style="width:${Math.min(r,100)}%;background:${c}"></div></div></div></td>
+              <td class="num">${Math.round(s.uri/1000).toLocaleString()}</td>
+              <td class="num" style="color:var(--text3)">${Math.round(s.bgt/1000).toLocaleString()}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ---- CROSS ----
+function renderCross() {
+  const el = document.getElementById('view-cross');
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="ctitle"><div class="ctitle-l">クロス分析設定</div></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+        ${mkSel('cross-row','行（縦軸）','業態,地方区分,店舗区分,都道府県,営業部')}
+        ${mkSel('cross-col','列（横軸）','地方区分,業態,店舗区分,年月')}
+        ${mkSel('cross-metric','指標','uri=売上（千円）,kyaku=客数,bgt=予算達成率(%),yoy=前年比(%)')}
+      </div>
+    </div>
+    <div class="card"><div class="ctitle"><div class="ctitle-l">クロス集計表</div></div><div class="cross-wrap" id="cross-res"></div></div>
+  `;
+  document.getElementById('cross-row').onchange = buildCross;
+  document.getElementById('cross-col').onchange = buildCross;
+  document.getElementById('cross-metric').onchange = buildCross;
+  buildCross();
+}
+
+function mkSelOv(id, label, opts, defaultVal) {
+  const options = opts.split(',').map(o=>{
+    const [v,t]=o.split('=');
+    const sel = v===defaultVal ? ' selected' : '';
+    return `<option value="${v}"${sel}>${t||v}</option>`;
+  }).join('');
+  return `<div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">${label}</label><select id="${id}" style="font-size:11px;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--rs)">${options}</select></div>`;
+}
+
+function buildOvCross() {
+  const rkEl=document.getElementById('ov-row');
+  const ckEl=document.getElementById('ov-col');
+  const mkEl=document.getElementById('ov-metric');
+  const resEl=document.getElementById('ov-cross-res');
+  if(!rkEl||!ckEl||!mkEl||!resEl) return;
+  const rk=rkEl.value, ck=ckEl.value, mk=mkEl.value;
+
+  const rv=[...new Set(filtered.map(d=>d[rk]).filter(Boolean))].sort();
+  const cv=[...new Set(filtered.map(d=>d[ck]).filter(Boolean))].sort();
+
+  const calc=(r,c)=>{
+    const rows=filtered.filter(d=>d[rk]===r&&d[ck]===c);
+    if(!rows.length) return null;
+    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
+    if(mk==="uri")   return Math.round(uri/1000);
+    if(mk==='kyaku') return ky;
+    if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
+    if(mk==='yoy')   return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
+  };
+  const rowTotal=r=>{
+    const rows=filtered.filter(d=>d[rk]===r);
+    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    if(mk==="uri")   return Math.round(uri/1000);
+    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
+    if(mk==='kyaku') return ky;
+    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
+    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    if(mk==='yoy')   return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
+  };
+
+  const vals=rv.flatMap(r=>cv.map(c=>calc(r,c))).filter(v=>v!=null&&isFinite(v));
+  const mx=Math.max(...vals,0), mn=Math.min(...vals,0);
+
+  const hbg=v=>{
+    if(v==null||!isFinite(v)) return '';
+    if(mk==='bgt'||mk==='yoy'){
+      const thr=mk==='bgt'?100:0;
+      return v>=thr?`rgba(26,122,84,${Math.min(Math.abs(v-thr)/50,1)*.3})`:`rgba(192,57,43,${Math.min(Math.abs(v-thr)/50,1)*.3})`;
+    }
+    const norm=mx===mn?.5:(v-mn)/(mx-mn);
+    return `rgba(26,111,196,${norm*.35})`;
+  };
+  const fv=v=>v==null||!isFinite(v)?'―':(mk==='uri'||mk==='kyaku')?v.toLocaleString():v+'%';
+
+  resEl.innerHTML=`<table class="ctable">
+    <thead><tr>
+      <th style="min-width:80px">${rk}＼${ck}</th>
+      ${cv.map(c=>`<th>${c}</th>`).join('')}
+      <th class="total-col">合計</th>
+    </tr></thead>
+    <tbody>${rv.map(r=>`<tr>
+      <th>${r}</th>
+      ${cv.map(c=>{const v=calc(r,c);return`<td class="hcell" style="background:${hbg(v)}">${fv(v)}</td>`;}).join('')}
+      <td class="hcell total-col">${fv(rowTotal(r))}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function mkSel(id, label, opts) {
+  const options = opts.split(',').map(o=>{const[v,t]=o.split('=');return `<option value="${v}">${t||v}</option>`;}).join('');
+  return `<div><label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">${label}</label><select id="${id}" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs)">${options}</select></div>`;
+}
+
+function buildCross() {
+  const rk=document.getElementById('cross-row').value;
+  const ck=document.getElementById('cross-col').value;
+  const mk=document.getElementById('cross-metric').value;
+  const rv=[...new Set(filtered.map(d=>d[rk]).filter(Boolean))].sort();
+  const cv=[...new Set(filtered.map(d=>d[ck]).filter(Boolean))].sort();
+
+  const calc=(r,c,data=filtered)=>{
+    const rows=data.filter(d=>d[rk]===r&&d[ck]===c);
+    if(!rows.length) return null;
+    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
+    if(mk==="uri") return Math.round(uri/1000);
+    if(mk==='kyaku') return ky;
+    if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
+    if(mk==='yoy') return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
+  };
+  const rowTotal=r=>{
+    const rows=filtered.filter(d=>d[rk]===r);
+    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    if(mk==="uri") return Math.round(uri/1000);
+    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
+    if(mk==='kyaku') return ky;
+    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
+    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    if(mk==='yoy') return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
+  };
+
+  const vals=rv.flatMap(r=>cv.map(c=>calc(r,c))).filter(v=>v!=null&&isFinite(v));
+  const mx=Math.max(...vals,0),mn=Math.min(...vals,0);
+
+  const hbg=v=>{
+    if(v==null||!isFinite(v)) return '';
+    if(mk==='bgt'||mk==='yoy') return v>=(mk==='bgt'?100:0)?`rgba(26,122,84,${Math.min(Math.abs(v-(mk==='bgt'?100:0))/50,1)*.3})`:`rgba(192,57,43,${Math.min(Math.abs(v-(mk==='bgt'?100:0))/50,1)*.3})`;
+    const norm=mx===mn?.5:(v-mn)/(mx-mn);
+    return `rgba(26,111,196,${norm*.35})`;
+  };
+  const fv=v=>v==null||!isFinite(v)?'―':(mk==='uri'||mk==='kyaku')?v.toLocaleString():v+'%';
+
+  document.getElementById('cross-res').innerHTML = `<table class="ctable">
+    <thead><tr><th>${rk}＼${ck}</th>${cv.map(c=>`<th>${c}</th>`).join('')}<th class="total-col">合計</th></tr></thead>
+    <tbody>${rv.map(r=>`<tr><th>${r}</th>${cv.map(c=>{const v=calc(r,c);return`<td class="hcell" style="background:${hbg(v)}">${fv(v)}</td>`;}).join('')}<td class="hcell total-col">${fv(rowTotal(r))}</td></tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ===== UTILS =====
+function gsum(data, key) {
+  const m={};
+  data.forEach(d=>{
+    const k=d[key]||'その他';
+    if(!m[k]) m[k]={uri:0,upy:0,bgt:0,ky:0};
+    m[k].uri+=d['売上(千円)']||0; m[k].upy+=d['前年売上(千円)']||0;
+    m[k].bgt+=d['予算(千円)']||0; m[k].ky+=d['客数']||0;
+  });
+  return m;
+}
+</script>
+</body>
+</html>
