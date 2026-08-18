@@ -543,39 +543,79 @@ function dc(v){ return v==null?'neu':parseFloat(v)>=0?'up':'dn'; }
 function renderMetrics() {
   const dept = DEPTS[currentDept];
   const isFood = dept.dataType === 'food';
-  // フードは円単位、店舗は千円単位
-  const uri   = isFood
-    ? filtered.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000
-    : filtered.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-  const upy   = isFood
-    ? filtered.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000
-    : filtered.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-  const ubgt  = isFood
-    ? filtered.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000
-    : filtered.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+  const isAll  = currentDept === 'all';
+
+  // フードは円単位→千円換算、店舗は千円単位
+  const storeUri  = filtered.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+  const storeUpy  = filtered.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+  const storeUbgt = filtered.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+
+  // 全社タブのとき foodData も合算（期間フィルタ適用）
+  const mFrom = document.getElementById('m-from').value;
+  const mTo   = document.getElementById('m-to').value;
+  const filteredFood = foodData.filter(d =>
+    (!mFrom || d['年月'] >= mFrom) && (!mTo || d['年月'] <= mTo)
+  );
+  const foodUri  = filteredFood.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000;
+  const foodUpy  = filteredFood.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000;
+  const foodUbgt = filteredFood.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000;
+
+  const uri  = isFood ? foodUri  : storeUri;
+  const upy  = isFood ? foodUpy  : storeUpy;
+  const ubgt = isFood ? foodUbgt : storeUbgt;
+
+  // 全社タブ: 合計 = store + food
+  const totalUri  = isAll ? storeUri  + foodUri  : uri;
+  const totalUpy  = isAll ? storeUpy  + foodUpy  : upy;
+  const totalUbgt = isAll ? storeUbgt + foodUbgt : ubgt;
+
   const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['客数']||0),0);
   const ukpy  = isFood ? 0 : filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
-  const yoy   = pctStr(uri,upy);
-  const kyYoy = pctStr(uky,ukpy);
-  const bgt   = ubgt?((uri/ubgt)*100).toFixed(1):null;
-  const tanka   = uky ?Math.round(uri/uky):0;
-  const tankapy = ukpy?Math.round(upy/ukpy):0;
-  const tankaYoy= tankapy?pctStr(tanka,tankapy):null;
-  const cnt = new Set(filtered.map(d=>d['店舗名'])).size;
+  const yoy   = pctStr(totalUri, totalUpy);
+  const kyYoy = pctStr(uky, ukpy);
+  const bgt   = totalUbgt ? ((totalUri/totalUbgt)*100).toFixed(1) : null;
+  const tanka   = uky  ? Math.round(storeUri/uky)  : 0;
+  const tankapy = ukpy ? Math.round(storeUpy/ukpy) : 0;
+  const tankaYoy= tankapy ? pctStr(tanka,tankapy) : null;
+  const cnt = isFood
+    ? new Set(filtered.map(d=>d['区分'])).size
+    : new Set(filtered.map(d=>d['店舗名'])).size;
 
   const bdg=(v)=>v!=null?`<span class="dbadge ${dc(v)}">${parseFloat(v)>=0?'+':''}${v}%</span>`:`<span class="dbadge neu">前年比―</span>`;
 
-  document.getElementById('metrics-row').innerHTML = `
+  // 全社タブ: 店舗とフードを分けて表示
+  const salesCard = isAll ? `
+    <div class="metric-card">
+      <div class="metric-label">総売上（店舗＋フード）</div>
+      <div class="metric-value">${fmtM(totalUri)}</div>
+      <div class="metric-sub">${bdg(yoy)}<span style="color:var(--text3)">前年 ${fmtM(totalUpy)}</span></div>
+    </div>
+    <div class="metric-card" style="border-left:3px solid #1a6fc4">
+      <div class="metric-label">うち店舗売上</div>
+      <div class="metric-value" style="font-size:18px">${fmtM(storeUri)}</div>
+      <div class="metric-sub"><span style="color:var(--text3)">前年 ${fmtM(storeUpy)}</span></div>
+    </div>
+    <div class="metric-card" style="border-left:3px solid #1a7a54">
+      <div class="metric-label">うちフードクリエイト</div>
+      <div class="metric-value" style="font-size:18px">${fmtM(foodUri)}</div>
+      <div class="metric-sub"><span style="color:var(--text3)">前年 ${fmtM(foodUpy)}</span></div>
+    </div>` : `
     <div class="metric-card">
       <div class="metric-label">売上</div>
       <div class="metric-value">${fmtM(uri)}</div>
-      <div class="metric-sub">${bdg(yoy)}<span style="color:var(--text3)">前年 ${fmtM(upy)}</span></div>
-    </div>
+      <div class="metric-sub">${bdg(pctStr(uri,upy))}<span style="color:var(--text3)">前年 ${fmtM(upy)}</span></div>
+    </div>`;
+
+  const bgtCard = `
     <div class="metric-card">
-      <div class="metric-label">予算達成率</div>
+      <div class="metric-label">予算達成率${isAll?'（込み）':''}</div>
       <div class="metric-value">${bgt!=null?bgt+'%':'―'}</div>
-      <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(ubgt)}</span></div>
-    </div>
+      <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(totalUbgt)}</span></div>
+    </div>`;
+
+  document.getElementById('metrics-row').innerHTML = `
+    ${salesCard}
+    ${bgtCard}
     ${!isFood ? `
     <div class="metric-card">
       <div class="metric-label">客数</div>
@@ -686,11 +726,32 @@ function renderOverview() {
     </div>
   `;
 
+  // 全社タブはフードクリエイト区分を追加
+  const isAllTab = currentDept === 'all';
+  let chartLabels = [...gL];
+  let chartUri    = gL.map(g=>Math.round(byG[g].uri/1000));
+  let chartUpy    = gL.map(g=>Math.round(byG[g].upy/1000));
+  let chartCols   = gL.map(g=>col(g));
+
+  if (isAllTab && foodData.length > 0) {
+    const mFrom2 = document.getElementById('m-from').value;
+    const mTo2   = document.getElementById('m-to').value;
+    const ff = foodData.filter(d=>(!mFrom2||d['年月']>=mFrom2)&&(!mTo2||d['年月']<=mTo2));
+    const foodTotalUri = Math.round(ff.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000);
+    const foodTotalUpy = Math.round(ff.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000);
+    if (foodTotalUri > 0 || foodTotalUpy > 0) {
+      chartLabels.push('フードクリエイト');
+      chartUri.push(foodTotalUri);
+      chartUpy.push(foodTotalUpy);
+      chartCols.push('#1a7a54');
+    }
+  }
+
   charts.gyotai = new Chart(document.getElementById('c-gyotai').getContext('2d'),{
     type:'bar',
-    data:{labels:gL,datasets:[
-      {label:'今期',data:gL.map(g=>Math.round(byG[g].uri/1000)),backgroundColor:gL.map(g=>col(g))},
-      {label:'前年',data:gL.map(g=>Math.round(byG[g].upy/1000)),backgroundColor:gL.map(g=>col(g)+'44'),borderColor:gL.map(g=>col(g)),borderWidth:1}
+    data:{labels:chartLabels,datasets:[
+      {label:'今期',data:chartUri,backgroundColor:chartCols},
+      {label:'前年',data:chartUpy,backgroundColor:chartCols.map(c=>c+'44'),borderColor:chartCols,borderWidth:1}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
   });
