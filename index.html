@@ -90,6 +90,8 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
 
 /* METRICS */
 .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.metrics-grid-2row{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.metrics-row-inner{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
 .metric-label{font-size:10px;color:var(--text3);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
 .metric-value{font-size:24px;font-weight:600;color:var(--text1);line-height:1.1}
@@ -536,7 +538,7 @@ function applyFilters() {
 }
 
 // ===== METRICS =====
-function fmtM(n) { return n==null?'―':'¥'+Math.round(n/1000).toLocaleString()+'千円'; }
+function fmtM(n) { return n==null?'―':'¥'+Math.round(n).toLocaleString()+'千円'; }
 function pctStr(a,b){ return a&&b?((a/b-1)*100).toFixed(1):null; }
 function dc(v){ return v==null?'neu':parseFloat(v)>=0?'up':'dn'; }
 
@@ -556,9 +558,10 @@ function renderMetrics() {
   const filteredFood = foodData.filter(d =>
     (!mFrom || d['年月'] >= mFrom) && (!mTo || d['年月'] <= mTo)
   );
-  const foodUri  = filteredFood.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000;
-  const foodUpy  = filteredFood.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000;
-  const foodUbgt = filteredFood.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000;
+  // 円単位→千円単位に変換
+  const foodUri  = filteredFood.reduce((s,d)=>s+(d['売上(円)']||0),0) / 1000;
+  const foodUpy  = filteredFood.reduce((s,d)=>s+(d['前年売上(円)']||0),0) / 1000;
+  const foodUbgt = filteredFood.reduce((s,d)=>s+(d['予算(円)']||0),0) / 1000;
 
   const uri  = isFood ? foodUri  : storeUri;
   const upy  = isFood ? foodUpy  : storeUpy;
@@ -583,39 +586,73 @@ function renderMetrics() {
 
   const bdg=(v)=>v!=null?`<span class="dbadge ${dc(v)}">${parseFloat(v)>=0?'+':''}${v}%</span>`:`<span class="dbadge neu">前年比―</span>`;
 
-  // 全社タブ: 店舗とフードを分けて表示
-  const salesCard = isAll ? `
-    <div class="metric-card">
-      <div class="metric-label">総売上（店舗＋フード）</div>
-      <div class="metric-value">${fmtM(totalUri)}</div>
-      <div class="metric-sub">${bdg(yoy)}<span style="color:var(--text3)">前年 ${fmtM(totalUpy)}</span></div>
+  const storeBgt2 = storeUbgt ? ((storeUri/storeUbgt)*100).toFixed(1) : null;
+  const foodBgt2  = foodUbgt  ? ((foodUri /foodUbgt )*100).toFixed(1) : null;
+
+  document.getElementById('metrics-row').innerHTML = isAll ? `
+    <!-- 全社タブ: 2行レイアウト -->
+    <!-- 1行目: 合計KPI -->
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:4px">
+      <div class="metric-card">
+        <div class="metric-label">総売上（店舗＋フード）</div>
+        <div class="metric-value" style="font-size:20px">${fmtM(totalUri)}</div>
+        <div class="metric-sub">${bdg(yoy)}<span style="color:var(--text3)">前年 ${fmtM(totalUpy)}</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">予算達成率（込み）</div>
+        <div class="metric-value">${bgt!=null?bgt+'%':'―'}</div>
+        <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(totalUbgt)}</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">客数</div>
+        <div class="metric-value">${uky.toLocaleString()}人</div>
+        <div class="metric-sub">${bdg(kyYoy)}<span style="color:var(--text3)">前年 ${ukpy.toLocaleString()}人</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">客単価</div>
+        <div class="metric-value">¥${tanka.toLocaleString()}</div>
+        <div class="metric-sub">${bdg(tankaYoy)}<span style="color:var(--text3)">前年 ¥${tankapy.toLocaleString()}</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">対象店舗数</div>
+        <div class="metric-value">${cnt}店</div>
+        <div class="metric-sub"><span style="color:var(--text3)">${filtered.length}レコード</span></div>
+      </div>
     </div>
-    <div class="metric-card" style="border-left:3px solid #1a6fc4">
-      <div class="metric-label">うち店舗売上</div>
-      <div class="metric-value" style="font-size:18px">${fmtM(storeUri)}</div>
-      <div class="metric-sub"><span style="color:var(--text3)">前年 ${fmtM(storeUpy)}</span></div>
+    <!-- 2行目: 店舗／フード内訳 -->
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <div class="metric-card" style="border-top:3px solid #1a6fc4">
+        <div class="metric-label" style="color:#1a6fc4">🍽 店舗売上</div>
+        <div class="metric-value" style="font-size:20px">${fmtM(storeUri)}</div>
+        <div class="metric-sub">${bdg(pctStr(storeUri,storeUpy))}<span style="color:var(--text3)">前年 ${fmtM(storeUpy)}</span></div>
+      </div>
+      <div class="metric-card" style="border-top:3px solid #1a6fc4">
+        <div class="metric-label" style="color:#1a6fc4">🍽 店舗予算達成率</div>
+        <div class="metric-value" style="font-size:20px">${storeBgt2!=null?storeBgt2+'%':'―'}</div>
+        <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(storeUbgt)}</span></div>
+      </div>
+      <div class="metric-card" style="border-top:3px solid #1a7a54">
+        <div class="metric-label" style="color:#1a7a54">🛒 フードクリエイト売上</div>
+        <div class="metric-value" style="font-size:20px">${fmtM(foodUri)}</div>
+        <div class="metric-sub">${bdg(pctStr(foodUri,foodUpy))}<span style="color:var(--text3)">前年 ${fmtM(foodUpy)}</span></div>
+      </div>
+      <div class="metric-card" style="border-top:3px solid #1a7a54">
+        <div class="metric-label" style="color:#1a7a54">🛒 フード予算達成率</div>
+        <div class="metric-value" style="font-size:20px">${foodBgt2!=null?foodBgt2+'%':'―'}</div>
+        <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(foodUbgt)}</span></div>
+      </div>
     </div>
-    <div class="metric-card" style="border-left:3px solid #1a7a54">
-      <div class="metric-label">うちフードクリエイト</div>
-      <div class="metric-value" style="font-size:18px">${fmtM(foodUri)}</div>
-      <div class="metric-sub"><span style="color:var(--text3)">前年 ${fmtM(foodUpy)}</span></div>
-    </div>` : `
+  ` : `
     <div class="metric-card">
       <div class="metric-label">売上</div>
       <div class="metric-value">${fmtM(uri)}</div>
       <div class="metric-sub">${bdg(pctStr(uri,upy))}<span style="color:var(--text3)">前年 ${fmtM(upy)}</span></div>
-    </div>`;
-
-  const bgtCard = `
+    </div>
     <div class="metric-card">
-      <div class="metric-label">予算達成率${isAll?'（込み）':''}</div>
+      <div class="metric-label">予算達成率${isFood?'':'（店舗）'}</div>
       <div class="metric-value">${bgt!=null?bgt+'%':'―'}</div>
-      <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(totalUbgt)}</span></div>
-    </div>`;
-
-  document.getElementById('metrics-row').innerHTML = `
-    ${salesCard}
-    ${bgtCard}
+      <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(ubgt)}</span></div>
+    </div>
     ${!isFood ? `
     <div class="metric-card">
       <div class="metric-label">客数</div>
@@ -869,7 +906,7 @@ function renderTrend() {
     if (isFood) return{m,
       uri:r.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000,
       upy:r.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000,
-      bgt:r.reduce((s,d)=>s+(d['予算(円)']||0)/1000,0)};
+      bgt:r.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000};
     return{m,uri:r.reduce((s,d)=>s+(d['売上(千円)']||0),0),upy:r.reduce((s,d)=>s+(d['前年売上(千円)']||0),0),bgt:r.reduce((s,d)=>s+(d['予算(千円)']||0),0)};
   });
 
@@ -1026,9 +1063,9 @@ function buildOvCross() {
     const rows=filtered.filter(d=>d[rk]===r&&d[ck]===c);
     if(!rows.length) return null;
     const isFD = DEPTS[currentDept].dataType === 'food';
-    const uri=isFD?rows.reduce((s,d)=>s+(d['売上(円)']||0),0):rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-    const upy=isFD?rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0):rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-    const bgt=isFD?rows.reduce((s,d)=>s+(d['予算(円)']||0),0):rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const uri=rows.reduce((s,d)=>s+(isFD?(d['売上(円)']||0)/1000:(d['売上(千円)']||0)),0);
+    const upy=rows.reduce((s,d)=>s+(isFD?(d['前年売上(円)']||0)/1000:(d['前年売上(千円)']||0)),0);
+    const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(千円)']||0)),0);
     const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
@@ -1091,9 +1128,9 @@ function buildCross() {
     const rows=data.filter(d=>d[rk]===r&&d[ck]===c);
     if(!rows.length) return null;
     const isFD = DEPTS[currentDept].dataType === 'food';
-    const uri=isFD?rows.reduce((s,d)=>s+(d['売上(円)']||0),0):rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-    const upy=isFD?rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0):rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-    const bgt=isFD?rows.reduce((s,d)=>s+(d['予算(円)']||0),0):rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const uri=rows.reduce((s,d)=>s+(isFD?(d['売上(円)']||0)/1000:(d['売上(千円)']||0)),0);
+    const upy=rows.reduce((s,d)=>s+(isFD?(d['前年売上(円)']||0)/1000:(d['前年売上(千円)']||0)),0);
+    const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(千円)']||0)),0);
     const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
