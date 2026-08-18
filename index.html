@@ -538,7 +538,7 @@ function applyFilters() {
 }
 
 // ===== METRICS =====
-function fmtM(n) { return n==null?'―':'¥'+Math.round(n).toLocaleString()+'千円'; }
+function fmtM(n) { return n==null?'―':'¥'+Math.round(n/1000).toLocaleString()+'千円'; }
 function pctStr(a,b){ return a&&b?((a/b-1)*100).toFixed(1):null; }
 function dc(v){ return v==null?'neu':parseFloat(v)>=0?'up':'dn'; }
 
@@ -572,13 +572,13 @@ function renderMetrics() {
   const totalUpy  = isAll ? storeUpy  + foodUpy  : upy;
   const totalUbgt = isAll ? storeUbgt + foodUbgt : ubgt;
 
-  const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['客数']||0),0);
+  const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['お客様数']||0),0);
   const ukpy  = isFood ? 0 : filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
   const yoy   = pctStr(totalUri, totalUpy);
   const kyYoy = pctStr(uky, ukpy);
   const bgt   = totalUbgt ? ((totalUri/totalUbgt)*100).toFixed(1) : null;
-  const tanka   = uky  ? Math.round(storeUri/uky)  : 0;
-  const tankapy = ukpy ? Math.round(storeUpy/ukpy) : 0;
+  const tanka   = uky  ? Math.round(storeUri/uky)  : 0;  // 円/人（円表示）
+  const tankapy = ukpy ? Math.round(storeUpy/ukpy) : 0; // 円/人（円表示）
   const tankaYoy= tankapy ? pctStr(tanka,tankapy) : null;
   const cnt = isFood
     ? new Set(filtered.map(d=>d['区分'])).size
@@ -604,12 +604,12 @@ function renderMetrics() {
         <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(totalUbgt)}</span></div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">客数</div>
+        <div class="metric-label">お客様数</div>
         <div class="metric-value">${uky.toLocaleString()}人</div>
         <div class="metric-sub">${bdg(kyYoy)}<span style="color:var(--text3)">前年 ${ukpy.toLocaleString()}人</span></div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">客単価</div>
+        <div class="metric-label">お客様単価</div>
         <div class="metric-value">¥${tanka.toLocaleString()}</div>
         <div class="metric-sub">${bdg(tankaYoy)}<span style="color:var(--text3)">前年 ¥${tankapy.toLocaleString()}</span></div>
       </div>
@@ -655,12 +655,12 @@ function renderMetrics() {
     </div>
     ${!isFood ? `
     <div class="metric-card">
-      <div class="metric-label">客数</div>
+      <div class="metric-label">お客様数</div>
       <div class="metric-value">${uky.toLocaleString()}人</div>
       <div class="metric-sub">${bdg(kyYoy)}<span style="color:var(--text3)">前年 ${ukpy.toLocaleString()}人</span></div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">客単価</div>
+      <div class="metric-label">お客様単価</div>
       <div class="metric-value">¥${tanka.toLocaleString()}</div>
       <div class="metric-sub">${bdg(tankaYoy)}<span style="color:var(--text3)">前年 ¥${tankapy.toLocaleString()}</span></div>
     </div>` : ''}
@@ -727,15 +727,9 @@ function renderOverview() {
         <div style="position:relative;height:210px"><canvas id="c-gyotai" role="img" aria-label="業態別売上">業態別</canvas></div>
       </div>
       <div class="card">
-        <div class="ctitle"><div class="ctitle-l">${isGlobal?'国別':'地方区分別'}構成</div></div>
-        <div style="position:relative;height:210px"><canvas id="c-area" role="img" aria-label="地域別構成">地域別</canvas></div>
-        <div style="margin-top:10px">
-          ${aL.slice(0,5).map((a,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
-            <span style="width:8px;height:8px;border-radius:2px;background:${ACOLS[i]||'#888'};display:inline-block;flex-shrink:0"></span>
-            <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a}</span>
-            <span style="font-weight:500">${Math.round(byA[a].uri/1000).toLocaleString()}千円</span>
-          </div>`).join('')}
-        </div>
+        <div class="ctitle"><div class="ctitle-l">部署別売上構成比</div></div>
+        <div style="position:relative;height:210px"><canvas id="c-area" role="img" aria-label="部署別構成">部署別</canvas></div>
+        <div style="margin-top:10px" id="dept-legend"></div>
       </div>
     </div>
     <div class="row2">
@@ -793,10 +787,51 @@ function renderOverview() {
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
   });
 
+  // 部署別売上構成比ドーナツ（全社: store+food、部署: store）
+  const DEPT_LABELS = ['営業本部','FC','IZAKAYA','ODEN','グローバル','フードクリエイト'];
+  const DEPT_COLS   = ['#1a6fc4','#9a6108','#c0392b','#5c47b8','#0e8c99','#1a7a54'];
+  const DEPT_FILTERS= ['営業本部','FC','IZAKAYA','ODEN','グローバル'];
+  const mFromD = document.getElementById('m-from').value;
+  const mToD   = document.getElementById('m-to').value;
+
+  const deptUris = DEPT_FILTERS.map(dp => {
+    // 全storeDataから期間フィルタ＋部署フィルタで集計
+    return storeData
+      .filter(d => (!mFromD||d['年月']>=mFromD)&&(!mToD||d['年月']<=mToD)&&d['営業部']===dp)
+      .reduce((s,d)=>s+(d['売上(千円)']||0),0);
+  });
+  // フードクリエイト
+  const foodDeptUri = foodData
+    .filter(d => (!mFromD||d['年月']>=mFromD)&&(!mToD||d['年月']<=mToD))
+    .reduce((s,d)=>s+(d['売上(円)']||0),0);
+  const allDeptUris = [...deptUris, foodDeptUri];
+
+  const legendEl = document.getElementById('dept-legend');
+  if (legendEl) {
+    legendEl.innerHTML = DEPT_LABELS.map((lb,i)=>`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
+        <span style="width:8px;height:8px;border-radius:2px;background:${DEPT_COLS[i]};display:inline-block;flex-shrink:0"></span>
+        <span style="flex:1;color:var(--text2)">${lb}</span>
+        <span style="font-weight:500">${Math.round(allDeptUris[i]/1000).toLocaleString()}千円</span>
+      </div>`).join('');
+  }
+
   charts.area = new Chart(document.getElementById('c-area').getContext('2d'),{
     type:'doughnut',
-    data:{labels:aL,datasets:[{data:aL.map(a=>Math.round(byA[a].uri/1000)),backgroundColor:aL.map((_,i)=>ACOLS[i]||'#888')}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`¥${c.parsed.toLocaleString()}千円`}}}}
+    data:{
+      labels:DEPT_LABELS,
+      datasets:[{
+        data:allDeptUris.map(v=>Math.round(v/1000)),
+        backgroundColor:DEPT_COLS
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>`${c.label}: ¥${c.parsed.toLocaleString()}千円`}}
+      }
+    }
   });
 
   // インラインクロス分析セレクタにイベント付与＆初回描画
@@ -831,7 +866,7 @@ function renderStores() {
     const k=d['店舗名'];
     if(!sm[k]) sm[k]={name:k,kubun:d['店舗区分'],gyotai:d['業態'],area:d['地方区分'],kuni:d['都道府県'],uri:0,upy:0,bgt:0,ky:0};
     sm[k].uri+=d['売上(千円)']||0; sm[k].upy+=d['前年売上(千円)']||0;
-    sm[k].bgt+=d['予算(千円)']||0; sm[k].ky+=d['客数']||0;
+    sm[k].bgt+=d['予算(千円)']||0; sm[k].ky+=d['お客様数']||0;
   });
   const stores=Object.values(sm).sort((a,b)=>b.uri-a.uri);
 
@@ -849,7 +884,7 @@ function renderStores() {
         <table class="dtable" id="store-table">
           <thead><tr>
             <th>#</th><th>店舗名</th><th>区分</th><th>業態</th><th>地域</th>
-            <th class="num">売上（千円）</th><th class="num">前年比</th><th class="num">予算達成率</th><th class="num">客数</th>
+            <th class="num">売上（千円）</th><th class="num">前年比</th><th class="num">予算達成率</th><th class="num">お客様数</th>
           </tr></thead>
           <tbody id="store-tbody"></tbody>
         </table>
@@ -1066,7 +1101,7 @@ function buildOvCross() {
     const uri=rows.reduce((s,d)=>s+(isFD?(d['売上(円)']||0)/1000:(d['売上(千円)']||0)),0);
     const upy=rows.reduce((s,d)=>s+(isFD?(d['前年売上(円)']||0)/1000:(d['前年売上(千円)']||0)),0);
     const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(千円)']||0)),0);
-    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['お客様数']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
     if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1076,7 +1111,7 @@ function buildOvCross() {
     const rows=filtered.filter(d=>d[rk]===r);
     const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
-    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
+    const ky=rows.reduce((s,d)=>s+(d['お客様数']||0),0);
     if(mk==='kyaku') return ky;
     const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
     if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1131,7 +1166,7 @@ function buildCross() {
     const uri=rows.reduce((s,d)=>s+(isFD?(d['売上(円)']||0)/1000:(d['売上(千円)']||0)),0);
     const upy=rows.reduce((s,d)=>s+(isFD?(d['前年売上(円)']||0)/1000:(d['前年売上(千円)']||0)),0);
     const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(千円)']||0)),0);
-    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['お客様数']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
     if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1141,7 +1176,7 @@ function buildCross() {
     const rows=filtered.filter(d=>d[rk]===r);
     const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
-    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
+    const ky=rows.reduce((s,d)=>s+(d['お客様数']||0),0);
     if(mk==='kyaku') return ky;
     const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
     if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1181,7 +1216,7 @@ function gsum(data, key) {
       m[k].uri+=d['売上(千円)']||0;
       m[k].upy+=d['前年売上(千円)']||0;
       m[k].bgt+=d['予算(千円)']||0;
-      m[k].ky+=d['客数']||0;
+      m[k].ky+=d['お客様数']||0;
     }
   });
   return m;
