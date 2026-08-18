@@ -433,6 +433,9 @@ function initDashboard() {
   storeData = storeData.map(d=>({...d,'年月':normalizeNengetsu(d['年月'])})).filter(d=>d['年月']);
   foodData  = foodData.map(d=>({...d,'年月':normalizeNengetsu(d['年月'])})).filter(d=>d['年月']);
 
+  // 全社タブ初期表示: allData を storeData に設定
+  allData = storeData;
+
   // 全月リスト（店舗+フードの両方から）
   const allM = new Set([
     ...storeData.map(d=>d['年月']),
@@ -572,7 +575,7 @@ function renderMetrics() {
   const totalUpy  = isAll ? storeUpy  + foodUpy  : upy;
   const totalUbgt = isAll ? storeUbgt + foodUbgt : ubgt;
 
-  const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['お客様数']||0),0);
+  const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['客数']||0),0);
   const ukpy  = isFood ? 0 : filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
   const yoy   = pctStr(totalUri, totalUpy);
   const kyYoy = pctStr(uky, ukpy);
@@ -864,7 +867,7 @@ function renderStores() {
     const k=d['店舗名'];
     if(!sm[k]) sm[k]={name:k,kubun:d['店舗区分'],gyotai:d['業態'],area:d['地方区分'],kuni:d['都道府県'],uri:0,upy:0,bgt:0,ky:0};
     sm[k].uri+=d['売上(円)']||0; sm[k].upy+=d['前年売上(円)']||0;
-    sm[k].bgt+=d['予算(円)']||0; sm[k].ky+=d['お客様数']||0;
+    sm[k].bgt+=d['予算(円)']||0; sm[k].ky+=d['客数']||0;
   });
   const stores=Object.values(sm).sort((a,b)=>b.uri-a.uri);
 
@@ -1099,7 +1102,7 @@ function buildOvCross() {
     const uri=rows.reduce((s,d)=>s+(d['売上(円)']||0),0);
     const upy=rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0);
     const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(円)']||0)),0);
-    const ky =rows.reduce((s,d)=>s+(d['お客様数']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
     if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1109,7 +1112,7 @@ function buildOvCross() {
     const rows=filtered.filter(d=>d[rk]===r);
     const uri=rows.reduce((s,d)=>s+(d['売上(円)']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
-    const ky=rows.reduce((s,d)=>s+(d['お客様数']||0),0);
+    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==='kyaku') return ky;
     const bgt=rows.reduce((s,d)=>s+(d['予算(円)']||0),0);
     if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1164,7 +1167,7 @@ function buildCross() {
     const uri=rows.reduce((s,d)=>s+(d['売上(円)']||0),0);
     const upy=rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0);
     const bgt=rows.reduce((s,d)=>s+(isFD?(d['予算(円)']||0):(d['予算(円)']||0)),0);
-    const ky =rows.reduce((s,d)=>s+(d['お客様数']||0),0);
+    const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
     if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1174,7 +1177,7 @@ function buildCross() {
     const rows=filtered.filter(d=>d[rk]===r);
     const uri=rows.reduce((s,d)=>s+(d['売上(円)']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
-    const ky=rows.reduce((s,d)=>s+(d['お客様数']||0),0);
+    const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==='kyaku') return ky;
     const bgt=rows.reduce((s,d)=>s+(d['予算(円)']||0),0);
     if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
@@ -1214,7 +1217,7 @@ function gsum(data, key) {
       m[k].uri+=d['売上(円)']||0;
       m[k].upy+=d['前年売上(円)']||0;
       m[k].bgt+=d['予算(円)']||0;
-      m[k].ky+=d['お客様数']||0;
+      m[k].ky+=d['客数']||0;
     }
   });
   return m;
