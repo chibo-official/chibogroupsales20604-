@@ -192,6 +192,9 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
         <button class="dept-tab" id="dt-global" onclick="switchDept('global',this)">
           <div class="dept-dot" style="background:#0e8c99"></div><span>グローバル</span>
         </button>
+        <button class="dept-tab" id="dt-food" onclick="switchDept('food',this)">
+          <div class="dept-dot" style="background:#1a7a54"></div><span>フードクリエイト</span>
+        </button>
       </div>
 
       <!-- ビュー -->
@@ -207,7 +210,7 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
       <!-- フィルタ -->
       <div class="filter-section">
         <div class="filter-label">絞り込み</div>
-        <div class="filter-row">
+        <div class="filter-row" id="f-area-row">
           <label>地方区分</label>
           <select id="f-area" onchange="applyFilters()">
             <option value="">すべて</option>
@@ -349,14 +352,17 @@ const DEPTS = {
   fc:      {label:'FC',          icon:'🤝', bg:'#6b4200', filter:'FC',           color:'#9a6108'},
   izakaya: {label:'IZAKAYA',     icon:'🍶', bg:'#7a1a1a', filter:'IZAKAYA',      color:'#c0392b'},
   oden:    {label:'ODEN',        icon:'🍢', bg:'#3a2a7a', filter:'ODEN',         color:'#5c47b8'},
-  global:  {label:'グローバル',  icon:'🌏', bg:'#0a5560', filter:'グローバル',   color:'#0e8c99'},
+  global:  {label:'グローバル',  icon:'🌏', bg:'#0a5560', filter:'グローバル',   color:'#0e8c99', dataType:'store'},
+  food:    {label:'フードクリエイト',  icon:'🛒', bg:'#1a6040', filter:null,           color:'#1a7a54', dataType:'food'},
 };
 
 // ===== STATE =====
-let allData = [];
-let filtered = [];
+let storeData = [];   // 店舗データ
+let foodData  = [];   // フードクリエイトデータ
+let allData   = [];   // 現在表示中データ（フィルタ前）
+let filtered  = [];
 let allMonths = [];
-let charts = {};
+let charts    = {};
 let currentView = 'overview';
 let currentDept = 'all';
 let sbCollapsed = false;
@@ -367,7 +373,8 @@ window.addEventListener('DOMContentLoaded', () => {
     loadFromGAS();
   } else {
     // GAS未設定: スタティックデータで起動
-    allData = ALL_DATA;
+    storeData = ALL_DATA;
+    foodData  = [];
     initDashboard();
   }
 });
@@ -383,13 +390,16 @@ function loadFromGAS() {
     document.getElementById('loading').style.display = 'none';
   };
   window[cbName] = (res) => {
-    if (res && res.status === 'ok' && res.data) {
-      allData = res.data;
-      document.getElementById('gas-status').textContent = '● GAS接続中 ' + res.count + '件';
+    if (res && res.status === 'ok') {
+      storeData = res.storeData || res.data || [];
+      foodData  = res.foodData  || [];
+      const total = storeData.length + foodData.length;
+      document.getElementById('gas-status').textContent = '● GAS接続中 店舗' + storeData.length + '件 / FC' + foodData.length + '件';
       document.getElementById('gas-status').style.color = '#1a7a54';
     } else {
       console.warn('GAS error, using static data:', res && res.error);
-      allData = ALL_DATA;
+      storeData = ALL_DATA;
+      foodData  = [];
       document.getElementById('gas-status').textContent = '● スタティックデータ';
       document.getElementById('gas-status').style.color = '#9a6108';
     }
@@ -417,11 +427,16 @@ function normalizeNengetsu(val) {
 }
 
 function initDashboard() {
-  allData = allData.map(d => ({
-    ...d,
-    '\u5e74\u6708': normalizeNengetsu(d['\u5e74\u6708'])
-  })).filter(d => d['\u5e74\u6708']);
-  allMonths = [...new Set(allData.map(d=>d['\u5e74\u6708']))].sort();
+  // 年月を正規化
+  storeData = storeData.map(d=>({...d,'年月':normalizeNengetsu(d['年月'])})).filter(d=>d['年月']);
+  foodData  = foodData.map(d=>({...d,'年月':normalizeNengetsu(d['年月'])})).filter(d=>d['年月']);
+
+  // 全月リスト（店舗+フードの両方から）
+  const allM = new Set([
+    ...storeData.map(d=>d['年月']),
+    ...foodData.map(d=>d['年月'])
+  ]);
+  allMonths = [...allM].sort();
   buildMonthSelectors();
   applyFilters();
   document.getElementById('loading').style.display = 'none';
@@ -444,6 +459,8 @@ function toggleSidebar() {
 function switchDept(deptKey, btn) {
   currentDept = deptKey;
   const d = DEPTS[deptKey];
+  // フードクリエイトタブの場合はクロス分析以外も使えるよう allData を切り替え
+  allData = (d.dataType === 'food') ? foodData : storeData;
 
   // バナー更新
   document.getElementById('dept-banner').style.background = d.bg;
@@ -462,6 +479,9 @@ function switchDept(deptKey, btn) {
   btn.style.background = d.bg;
   btn.style.color = '#fff';
 
+  // フードクリエイト時は地方区分フィルタを隠す
+  const filterSec = document.getElementById('f-area-row');
+  if (filterSec) filterSec.style.display = (d.dataType === 'food') ? 'none' : '';
   applyFilters();
 }
 
@@ -485,19 +505,29 @@ function applyFilters() {
   const mTo   = document.getElementById('m-to').value;
   const dept  = DEPTS[currentDept];
 
-  filtered = allData.filter(d =>
-    (!area  || d['地方区分'] === area) &&
-    (!mFrom || d['年月'] >= mFrom) &&
-    (!mTo   || d['年月'] <= mTo) &&
-    (!dept.filter || d['営業部'] === dept.filter)
-  );
+  if (dept.dataType === 'food') {
+    filtered = allData.filter(d =>
+      (!mFrom || d['年月'] >= mFrom) &&
+      (!mTo   || d['年月'] <= mTo)
+    );
+  } else {
+    filtered = allData.filter(d =>
+      (!area   || d['地方区分'] === area) &&
+      (!mFrom  || d['年月'] >= mFrom) &&
+      (!mTo    || d['年月'] <= mTo) &&
+      (!dept.filter || d['営業部'] === dept.filter)
+    );
+  }
 
   const chipArea = document.getElementById('chip-area');
   chipArea.style.display = area ? 'block' : 'none';
   chipArea.textContent = area;
   chipArea.className = area ? 'chip on' : 'chip';
 
-  const cnt = new Set(filtered.map(d=>d['店舗名'])).size;
+  // フードクリエイトは区分の種類数、店舗系は店舗名の種類数
+  const cnt = dept.dataType === 'food'
+    ? new Set(filtered.map(d=>d['区分'])).size
+    : new Set(filtered.map(d=>d['店舗名'])).size;
   const period = mFrom===mTo ? mFrom : `${mFrom} 〜 ${mTo}`;
   document.getElementById('page-sub').textContent = `${period} ／ ${cnt}店舗`;
 
@@ -511,11 +541,20 @@ function pctStr(a,b){ return a&&b?((a/b-1)*100).toFixed(1):null; }
 function dc(v){ return v==null?'neu':parseFloat(v)>=0?'up':'dn'; }
 
 function renderMetrics() {
-  const uri   = filtered.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-  const upy   = filtered.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-  const ubgt  = filtered.reduce((s,d)=>s+(d['予算(千円)']||0),0);
-  const uky   = filtered.reduce((s,d)=>s+(d['客数']||0),0);
-  const ukpy  = filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
+  const dept = DEPTS[currentDept];
+  const isFood = dept.dataType === 'food';
+  // フードは円単位、店舗は千円単位
+  const uri   = isFood
+    ? filtered.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000
+    : filtered.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+  const upy   = isFood
+    ? filtered.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000
+    : filtered.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+  const ubgt  = isFood
+    ? filtered.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000
+    : filtered.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+  const uky   = isFood ? 0 : filtered.reduce((s,d)=>s+(d['客数']||0),0);
+  const ukpy  = isFood ? 0 : filtered.reduce((s,d)=>s+(d['前年客数']||0),0);
   const yoy   = pctStr(uri,upy);
   const kyYoy = pctStr(uky,ukpy);
   const bgt   = ubgt?((uri/ubgt)*100).toFixed(1):null;
@@ -537,6 +576,7 @@ function renderMetrics() {
       <div class="metric-value">${bgt!=null?bgt+'%':'―'}</div>
       <div class="metric-sub"><span style="color:var(--text3)">予算 ${fmtM(ubgt)}</span></div>
     </div>
+    ${!isFood ? `
     <div class="metric-card">
       <div class="metric-label">客数</div>
       <div class="metric-value">${uky.toLocaleString()}人</div>
@@ -546,10 +586,10 @@ function renderMetrics() {
       <div class="metric-label">客単価</div>
       <div class="metric-value">¥${tanka.toLocaleString()}</div>
       <div class="metric-sub">${bdg(tankaYoy)}<span style="color:var(--text3)">前年 ¥${tankapy.toLocaleString()}</span></div>
-    </div>
+    </div>` : ''}
     <div class="metric-card">
-      <div class="metric-label">対象店舗数</div>
-      <div class="metric-value">${cnt}店</div>
+      <div class="metric-label">${isFood ? '対象区分数' : '対象店舗数'}</div>
+      <div class="metric-value">${cnt}${isFood ? '区分' : '店'}</div>
       <div class="metric-sub"><span style="color:var(--text3)">${filtered.length}レコード</span></div>
     </div>
   `;
@@ -572,6 +612,8 @@ function col(g){return GCOLS[g]||'#888'}
 
 function renderOverview() {
   const el = document.getElementById('view-overview');
+  const dept = DEPTS[currentDept];
+  if (dept.dataType === 'food') { renderFoodOverview(el); return; }
   const byG = gsum(filtered,'業態');
   const gL  = Object.keys(byG).sort((a,b)=>byG[b].uri-byG[a].uri);
 
@@ -684,6 +726,8 @@ function yoyList(items) {
 // ---- STORES ----
 function renderStores() {
   const el = document.getElementById('view-stores');
+  const dept = DEPTS[currentDept];
+  if (dept.dataType === 'food') { renderFoodStores(el); return; }
   const sm = {};
   filtered.forEach(d=>{
     const k=d['店舗名'];
@@ -754,20 +798,28 @@ function sortStores(k, btn) {
 // ---- TREND ----
 function renderTrend() {
   const el = document.getElementById('view-trend');
+  const dept = DEPTS[currentDept];
+  const isFood = dept.dataType === 'food';
   const months = [...new Set(filtered.map(d=>d['年月']))].sort();
   if(months.length<1){el.innerHTML='<div class="card"><div class="empty">月次データが1件のみです。複数月のデータ追加後に推移グラフが表示されます。</div></div>';return;}
 
   const mt = months.map(m=>{
     const r=filtered.filter(d=>d['年月']===m);
+    if (isFood) return{m,
+      uri:r.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000,
+      upy:r.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000,
+      bgt:r.reduce((s,d)=>s+(d['予算(円)']||0)/1000,0)};
     return{m,uri:r.reduce((s,d)=>s+(d['売上(千円)']||0),0),upy:r.reduce((s,d)=>s+(d['前年売上(千円)']||0),0),bgt:r.reduce((s,d)=>s+(d['予算(千円)']||0),0)};
   });
 
-  // 業態別積み上げ
-  const gyotais=[...new Set(filtered.map(d=>d['業態']))];
-  const stackDs = gyotais.map(g=>({
+  // 業態/区分別積み上げ
+  const stackKey = isFood ? '区分' : '業態';
+  const gyotais=[...new Set(filtered.map(d=>d[stackKey]))];
+  const KCOLS2=['#1a7a54','#1a6fc4','#c0392b','#9a6108','#5c47b8','#0e8c99','#e67e22','#7f8c8d','#2c3e50','#16a085','#d35400','#8e44ad'];
+  const stackDs = gyotais.map((g,gi)=>({
     label:g,
-    data:months.map(m=>Math.round(filtered.filter(d=>d['年月']===m&&d['業態']===g).reduce((s,d)=>s+(d['売上(千円)']||0),0)/1000)),
-    backgroundColor:col(g)
+    data:months.map(m=>Math.round(filtered.filter(d=>d['年月']===m&&d[stackKey]===g).reduce((s,d)=>s+(isFood?(d['売上(円)']||0)/1000:(d['売上(千円)']||0)),0))),
+    backgroundColor: isFood ? (KCOLS2[gi]||'#888') : col(g)
   }));
 
   const yoyD = mt.map(r=>r.upy?parseFloat(((r.uri/r.upy-1)*100).toFixed(1)):null);
@@ -822,11 +874,19 @@ function renderTrend() {
 // ---- BUDGET ----
 function renderBudget() {
   const el = document.getElementById('view-budget');
+  const dept = DEPTS[currentDept];
+  const isFood = dept.dataType === 'food';
   const sm={};
   filtered.forEach(d=>{
-    const k=d['店舗名'];
-    if(!sm[k]) sm[k]={name:k,kubun:d['店舗区分'],gyotai:d['業態'],uri:0,bgt:0};
-    sm[k].uri+=d['売上(千円)']||0; sm[k].bgt+=d['予算(千円)']||0;
+    const k = isFood ? d['区分'] : d['店舗名'];
+    if(!sm[k]) sm[k]={name:k, kubun:isFood?'FC':d['店舗区分'], gyotai:isFood?d['区分']:d['業態'], uri:0, bgt:0};
+    if (isFood) {
+      sm[k].uri+=(d['売上(円)']||0)/1000;
+      sm[k].bgt+=(d['予算(円)']||0)/1000;
+    } else {
+      sm[k].uri+=d['売上(千円)']||0;
+      sm[k].bgt+=d['予算(千円)']||0;
+    }
   });
   const stores=Object.values(sm).filter(s=>s.bgt>0).sort((a,b)=>(b.uri/b.bgt)-(a.uri/a.bgt));
   const rates=stores.map(s=>parseFloat(((s.uri/s.bgt)*100).toFixed(1)));
@@ -904,9 +964,10 @@ function buildOvCross() {
   const calc=(r,c)=>{
     const rows=filtered.filter(d=>d[rk]===r&&d[ck]===c);
     if(!rows.length) return null;
-    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const isFD = DEPTS[currentDept].dataType === 'food';
+    const uri=isFD?rows.reduce((s,d)=>s+(d['売上(円)']||0),0):rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    const upy=isFD?rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0):rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    const bgt=isFD?rows.reduce((s,d)=>s+(d['予算(円)']||0),0):rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
     const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri")   return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
@@ -968,9 +1029,10 @@ function buildCross() {
   const calc=(r,c,data=filtered)=>{
     const rows=data.filter(d=>d[rk]===r&&d[ck]===c);
     if(!rows.length) return null;
-    const uri=rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
-    const upy=rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
-    const bgt=rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
+    const isFD = DEPTS[currentDept].dataType === 'food';
+    const uri=isFD?rows.reduce((s,d)=>s+(d['売上(円)']||0),0):rows.reduce((s,d)=>s+(d['売上(千円)']||0),0);
+    const upy=isFD?rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0):rows.reduce((s,d)=>s+(d['前年売上(千円)']||0),0);
+    const bgt=isFD?rows.reduce((s,d)=>s+(d['予算(円)']||0),0):rows.reduce((s,d)=>s+(d['予算(千円)']||0),0);
     const ky =rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==="uri") return Math.round(uri/1000);
     if(mk==='kyaku') return ky;
@@ -1009,13 +1071,140 @@ function buildCross() {
 // ===== UTILS =====
 function gsum(data, key) {
   const m={};
+  const isFood = DEPTS[currentDept].dataType === 'food';
   data.forEach(d=>{
     const k=d[key]||'その他';
     if(!m[k]) m[k]={uri:0,upy:0,bgt:0,ky:0};
-    m[k].uri+=d['売上(千円)']||0; m[k].upy+=d['前年売上(千円)']||0;
-    m[k].bgt+=d['予算(千円)']||0; m[k].ky+=d['客数']||0;
+    if (isFood) {
+      m[k].uri+=(d['売上(円)']||0)/1000;
+      m[k].upy+=(d['前年売上(円)']||0)/1000;
+      m[k].bgt+=(d['予算(円)']||0)/1000;
+    } else {
+      m[k].uri+=d['売上(千円)']||0;
+      m[k].upy+=d['前年売上(千円)']||0;
+      m[k].bgt+=d['予算(千円)']||0;
+      m[k].ky+=d['客数']||0;
+    }
   });
   return m;
+}
+
+// ── フードクリエイト専用ビュー ──────────────────────────────────
+function renderFoodOverview(el) {
+  const byK = gsum(filtered, '区分');
+  const kL  = Object.keys(byK).sort((a,b)=>byK[b].uri-byK[a].uri);
+  const KCOLS=['#1a6fc4','#c0392b','#1a7a54','#9a6108','#5c47b8','#0e8c99','#e67e22','#7f8c8d','#2c3e50','#16a085','#d35400','#8e44ad','#27ae60','#2980b9','#c0392b'];
+
+  // 月次集計
+  const months = [...new Set(filtered.map(d=>d['年月']))].sort();
+  const monthTotals = months.map(m=>{
+    const r=filtered.filter(d=>d['年月']===m);
+    return{
+      m,
+      uri:r.reduce((s,d)=>s+(d['売上(円)']||0),0)/1000,
+      upy:r.reduce((s,d)=>s+(d['前年売上(円)']||0),0)/1000,
+      bgt:r.reduce((s,d)=>s+(d['予算(円)']||0),0)/1000,
+    };
+  });
+
+  el.innerHTML = `
+    <div class="row2">
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">区分別売上（今期 vs 前年）</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          ${kL.map((k,i)=>`<span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2)"><span style="width:9px;height:9px;border-radius:2px;background:${KCOLS[i]||'#888'};display:inline-block"></span>${k}</span>`).join('')}
+        </div>
+        <div style="position:relative;height:220px"><canvas id="c-food-kubun" role="img" aria-label="区分別売上">区分別</canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><div class="ctitle-l">月次推移（今期 / 前年 / 予算）</div></div>
+        <div style="position:relative;height:220px"><canvas id="c-food-trend" role="img" aria-label="月次推移">推移</canvas></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="ctitle">
+        <div class="ctitle-l">🔀 クロス分析</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          ${mkSelOv('ov-row',  '行',  '区分,年月',               '区分')}
+          ${mkSelOv('ov-col',  '列',  '年月,区分',               '年月')}
+          ${mkSelOv('ov-metric','指標','uri=売上（千円）,bgt=予算達成率(%),yoy=前年比(%)', 'uri')}
+        </div>
+      </div>
+      <div class="cross-wrap" id="ov-cross-res"></div>
+    </div>
+  `;
+
+  // 区分別棒グラフ
+  charts.foodKubun = new Chart(document.getElementById('c-food-kubun').getContext('2d'),{
+    type:'bar',
+    data:{labels:kL,datasets:[
+      {label:'今期',data:kL.map(k=>Math.round(byK[k].uri)),backgroundColor:kL.map((_,i)=>KCOLS[i]||'#888')},
+      {label:'前年',data:kL.map(k=>Math.round(byK[k].upy)),backgroundColor:kL.map((_,i)=>KCOLS[i]+'44'),borderColor:kL.map((_,i)=>KCOLS[i]),borderWidth:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxRotation:30}},y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
+  });
+
+  // 月次推移ライン
+  charts.foodTrend = new Chart(document.getElementById('c-food-trend').getContext('2d'),{
+    type:'line',
+    data:{labels:months,datasets:[
+      {label:'今期',data:monthTotals.map(r=>Math.round(r.uri)),borderColor:'#1a7a54',backgroundColor:'rgba(26,122,84,.07)',fill:true,tension:.3,pointRadius:4},
+      {label:'前年',data:monthTotals.map(r=>Math.round(r.upy)),borderColor:'#bbb',borderDash:[4,4],tension:.3,fill:false,pointRadius:3},
+      {label:'予算',data:monthTotals.map(r=>Math.round(r.bgt)),borderColor:'#f0b429',borderDash:[2,2],tension:.3,fill:false,pointRadius:0},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
+  });
+
+  ['ov-row','ov-col','ov-metric'].forEach(id=>{
+    const e=document.getElementById(id);
+    if(e) e.onchange=buildOvCross;
+  });
+  buildOvCross();
+}
+
+function renderFoodStores(el) {
+  // 区分×月の集計
+  const sm = {};
+  filtered.forEach(d=>{
+    const k = d['区分']||'その他';
+    if (!sm[k]) sm[k]={name:k,uri:0,upy:0,bgt:0};
+    sm[k].uri += (d['売上(円)']||0)/1000;
+    sm[k].upy += (d['前年売上(円)']||0)/1000;
+    sm[k].bgt += (d['予算(円)']||0)/1000;
+  });
+  const rows = Object.values(sm).sort((a,b)=>b.uri-a.uri);
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-l">区分別売上一覧（${rows.length}区分）</div></div>
+      <div style="overflow-x:auto">
+        <table class="dtable">
+          <thead><tr>
+            <th>#</th><th>区分</th>
+            <th class="num">売上（千円）</th><th class="num">前年比</th>
+            <th class="num">予算達成率</th><th class="num">前年（千円）</th><th class="num">予算（千円）</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map((s,i)=>{
+              const yoy=s.upy?pctStr(s.uri,s.upy):null;
+              const bgt=s.bgt?((s.uri/s.bgt)*100).toFixed(1):null;
+              const yc=yoy===null?'p-gray':parseFloat(yoy)>=0?'p-green':'p-red';
+              const bc=bgt===null?'p-gray':parseFloat(bgt)>=100?'p-green':'p-red';
+              return `<tr>
+                <td style="color:var(--text3)">${i+1}</td>
+                <td style="font-weight:500">${s.name}</td>
+                <td class="num">${Math.round(s.uri).toLocaleString()}</td>
+                <td class="num"><span class="pill ${yc}">${yoy!=null?(parseFloat(yoy)>=0?'+':'')+yoy+'%':'―'}</span></td>
+                <td class="num"><span class="pill ${bc}">${bgt!=null?bgt+'%':'―'}</span></td>
+                <td class="num" style="color:var(--text3)">${Math.round(s.upy).toLocaleString()}</td>
+                <td class="num" style="color:var(--text3)">${Math.round(s.bgt).toLocaleString()}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 </script>
 </body>
