@@ -564,7 +564,8 @@ function renderMetrics() {
   // 円単位→千円単位に変換
   const foodUri  = filteredFood.reduce((s,d)=>s+(d['売上(円)']||0),0);
   const foodUpy  = filteredFood.reduce((s,d)=>s+(d['前年売上(円)']||0),0);
-  const foodUbgt = filteredFood.reduce((s,d)=>s+(d['予算(円)']||0),0);
+  // フードは売上実績がある月の予算のみ集計（実績なし月の予算を除外）
+  const foodUbgt = filteredFood.filter(d=>(d['売上(円)']||0)>0).reduce((s,d)=>s+(d['予算(円)']||0),0);
 
   const uri  = isFood ? foodUri  : storeUri;
   const upy  = isFood ? foodUpy  : storeUpy;
@@ -1016,7 +1017,8 @@ function renderBudget() {
     if(!sm[k]) sm[k]={name:k, kubun:isFood?'FC':d['店舗区分'], gyotai:isFood?d['区分']:d['業態'], uri:0, bgt:0};
     if (isFood) {
       sm[k].uri+=(d['売上(円)']||0);
-      sm[k].bgt+=(d['予算(円)']||0);
+      // フードは売上実績がある月の予算のみ集計
+      if ((d['売上(円)']||0) > 0) sm[k].bgt+=(d['予算(円)']||0);
     } else {
       sm[k].uri+=d['売上(円)']||0;
       sm[k].bgt+=d['予算(円)']||0;
@@ -1114,7 +1116,7 @@ function buildOvCross() {
     if(mk==="uri")   return Math.round(uri/1000);
     const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==='kyaku') return ky;
-    const bgt=rows.reduce((s,d)=>s+(d['予算(円)']||0),0);
+    const bgt=rows.filter(d=>(d['売上(円)']||0)>0).reduce((s,d)=>s+(d['予算(円)']||0),0);
     if(mk==='bgt')   return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
     const upy=rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0);
     if(mk==='yoy')   return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
@@ -1179,7 +1181,7 @@ function buildCross() {
     if(mk==="uri") return Math.round(uri/1000);
     const ky=rows.reduce((s,d)=>s+(d['客数']||0),0);
     if(mk==='kyaku') return ky;
-    const bgt=rows.reduce((s,d)=>s+(d['予算(円)']||0),0);
+    const bgt=rows.filter(d=>(d['売上(円)']||0)>0).reduce((s,d)=>s+(d['予算(円)']||0),0);
     if(mk==='bgt') return bgt?parseFloat(((uri/bgt)*100).toFixed(1)):null;
     const upy=rows.reduce((s,d)=>s+(d['前年売上(円)']||0),0);
     if(mk==='yoy') return upy?parseFloat(((uri/upy-1)*100).toFixed(1)):null;
@@ -1212,7 +1214,8 @@ function gsum(data, key) {
     if (isFood) {
       m[k].uri+=(d['売上(円)']||0);
       m[k].upy+=(d['前年売上(円)']||0);
-      m[k].bgt+=(d['予算(円)']||0);
+      // 実績のある月のみ予算集計
+      if ((d['売上(円)']||0)>0) m[k].bgt+=(d['予算(円)']||0);
     } else {
       m[k].uri+=d['売上(円)']||0;
       m[k].upy+=d['前年売上(円)']||0;
@@ -1272,8 +1275,8 @@ function renderFoodOverview(el) {
   charts.foodKubun = new Chart(document.getElementById('c-food-kubun').getContext('2d'),{
     type:'bar',
     data:{labels:kL,datasets:[
-      {label:'今期',data:kL.map(k=>Math.round(byK[k].uri)),backgroundColor:kL.map((_,i)=>KCOLS[i]||'#888')},
-      {label:'前年',data:kL.map(k=>Math.round(byK[k].upy)),backgroundColor:kL.map((_,i)=>KCOLS[i]+'44'),borderColor:kL.map((_,i)=>KCOLS[i]),borderWidth:1}
+      {label:'今期',data:kL.map(k=>Math.round(byK[k].uri/1000)),backgroundColor:kL.map((_,i)=>KCOLS[i]||'#888')},
+      {label:'前年',data:kL.map(k=>Math.round(byK[k].upy/1000)),backgroundColor:kL.map((_,i)=>KCOLS[i]+'44'),borderColor:kL.map((_,i)=>KCOLS[i]),borderWidth:1}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxRotation:30}},y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
   });
@@ -1282,9 +1285,9 @@ function renderFoodOverview(el) {
   charts.foodTrend = new Chart(document.getElementById('c-food-trend').getContext('2d'),{
     type:'line',
     data:{labels:months,datasets:[
-      {label:'今期',data:monthTotals.map(r=>Math.round(r.uri)),borderColor:'#1a7a54',backgroundColor:'rgba(26,122,84,.07)',fill:true,tension:.3,pointRadius:4},
-      {label:'前年',data:monthTotals.map(r=>Math.round(r.upy)),borderColor:'#bbb',borderDash:[4,4],tension:.3,fill:false,pointRadius:3},
-      {label:'予算',data:monthTotals.map(r=>Math.round(r.bgt)),borderColor:'#f0b429',borderDash:[2,2],tension:.3,fill:false,pointRadius:0},
+      {label:'今期',data:monthTotals.map(r=>Math.round(r.uri/1000)),borderColor:'#1a7a54',backgroundColor:'rgba(26,122,84,.07)',fill:true,tension:.3,pointRadius:4},
+      {label:'前年',data:monthTotals.map(r=>Math.round(r.upy/1000)),borderColor:'#bbb',borderDash:[4,4],tension:.3,fill:false,pointRadius:3},
+      {label:'予算',data:monthTotals.map(r=>Math.round(r.bgt/1000)),borderColor:'#f0b429',borderDash:[2,2],tension:.3,fill:false,pointRadius:0},
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>`¥${v.toLocaleString()}千円`,font:{size:10}}}}}
   });
@@ -1304,7 +1307,7 @@ function renderFoodStores(el) {
     if (!sm[k]) sm[k]={name:k,uri:0,upy:0,bgt:0};
     sm[k].uri += (d['売上(円)']||0);
     sm[k].upy += (d['前年売上(円)']||0);
-    sm[k].bgt += (d['予算(円)']||0);
+    if ((d['売上(円)']||0)>0) sm[k].bgt += (d['予算(円)']||0);
   });
   const rows = Object.values(sm).sort((a,b)=>b.uri-a.uri);
 
