@@ -26,7 +26,7 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
 .layout{display:flex;height:100vh;overflow:hidden}
 .sidebar{width:230px;min-width:230px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;transition:width .2s}
 .sidebar.collapsed{width:52px;min-width:52px}
-.main{flex:1;overflow-y:auto;padding:24px}
+.main{flex:1;overflow-y:auto;padding:24px}@media(max-width:640px){.main{padding:56px 12px 12px}}
 
 /* SIDEBAR HEADER */
 .sb-header{padding:16px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
@@ -69,6 +69,9 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
 .filter-row label{font-size:11px;color:var(--text2);display:block;margin-bottom:2px}
 .filter-row select{width:100%;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text1);cursor:pointer}
 
+.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:300;width:38px;height:38px;border-radius:var(--rs);background:var(--surface);border:1px solid var(--border2);align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);flex-direction:column;gap:4px;}
+.hamburger span{display:block;width:18px;height:2px;background:var(--text2);border-radius:2px;}
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199;}
 .toggle-btn{position:absolute;top:16px;right:-11px;width:22px;height:22px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:var(--text2);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .sb-wrap{position:relative;display:flex}
 
@@ -106,6 +109,58 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
 .row21{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
 .row1{margin-bottom:14px}
 @media(max-width:860px){.row2,.row21{grid-template-columns:1fr}}
+
+/* ===== MOBILE RESPONSIVE (≤640px) ===== */
+/* チャート高さ調整用 */
+@media(max-width:640px){
+  /* サイドバー: モバイルはドロワー式 */
+  .sidebar-wrap { position:fixed; top:0; left:0; height:100%; z-index:200; }
+  .sidebar { width:240px; min-width:240px; box-shadow:4px 0 16px rgba(0,0,0,.12); transform:translateX(-100%); transition:transform .25s; height:100vh; }
+  .sidebar.mobile-open { transform:translateX(0); }
+  .sidebar.collapsed { width:240px; min-width:240px; transform:translateX(-100%); }
+  .main { padding:12px; margin-left:0 !important; }
+  .toggle-btn { display:none; }
+
+  /* ハンバーガーボタン */
+  .hamburger { display:flex !important; }
+
+  /* オーバーレイ */
+  .mob-overlay { display:block !important; }
+
+  /* トップバー */
+  .topbar { flex-direction:column; align-items:flex-start; gap:8px; margin-bottom:12px; }
+  .topbar-right { flex-wrap:wrap; gap:6px; width:100%; }
+  .month-range select { font-size:10px; padding:3px 4px; }
+
+  /* メトリクスカード */
+  .metrics-grid { grid-template-columns:1fr 1fr; gap:8px; }
+  .metrics-row-inner { grid-template-columns:1fr 1fr !important; gap:8px; }
+  .metric-card { padding:10px 12px; }
+  .metric-value { font-size:18px !important; }
+
+  /* 部署バナー */
+  .dept-banner { padding:10px 14px; margin-bottom:12px; }
+  .dept-banner-icon { font-size:18px; }
+  .dept-banner-name { font-size:14px; }
+
+  /* グリッドレイアウト */
+  .row2, .row21 { grid-template-columns:1fr !important; }
+
+  /* テーブルをスクロール可能に */
+  .dtable-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .dtable { min-width:600px; }
+  .ctable { min-width:400px; }
+  .cross-wrap { overflow-x:auto; }
+
+  /* チャート高さ調整 */
+  .card { padding:12px 14px; }
+}
+
+/* ===== TABLET (641px〜860px) ===== */
+@media(min-width:641px) and (max-width:860px){
+  .sidebar { width:200px; min-width:200px; }
+  .metrics-grid { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
+}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
 .ctitle{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .ctitle-l{display:flex;align-items:center;gap:6px}
@@ -161,6 +216,10 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
 </head>
 <body>
 
+<button class="hamburger" id="hamburger" onclick="toggleMobile()" aria-label="メニュー">
+  <span></span><span></span><span></span>
+</button>
+<div class="mob-overlay" id="mob-overlay" onclick="toggleMobile()"></div>
 <div class="layout">
   <div class="sb-wrap">
     <div class="sidebar" id="sidebar">
@@ -231,7 +290,7 @@ body{font-family:'Helvetica Neue','Hiragino Kaku Gothic ProN','Meiryo',sans-seri
     <button class="toggle-btn" id="toggle-btn" onclick="toggleSidebar()">◀</button>
   </div>
 
-  <main class="main">
+  <main class="main" id="main-content">
     <!-- DEPT BANNER -->
     <div class="dept-banner" id="dept-banner" style="background:#2c2c2a">
       <div class="dept-banner-icon" id="banner-icon">🏢</div>
@@ -460,8 +519,25 @@ function toggleSidebar() {
   document.getElementById('toggle-btn').textContent = sbCollapsed ? '▶' : '◀';
 }
 
+function toggleMobile() {
+  const sb = document.getElementById('sidebar');
+  const overlay = document.getElementById('mob-overlay');
+  const isOpen = sb.classList.contains('mobile-open');
+  sb.classList.toggle('mobile-open', !isOpen);
+  overlay.style.display = isOpen ? 'none' : 'block';
+}
+
+// モバイル: ナビアイテムクリック後にサイドバーを閉じる
+function closeMobileIfNeeded() {
+  if (window.innerWidth <= 640) {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    document.getElementById('mob-overlay').style.display = 'none';
+  }
+}
+
 // ===== DEPT SWITCH =====
 function switchDept(deptKey, btn) {
+  closeMobileIfNeeded();
   currentDept = deptKey;
   const d = DEPTS[deptKey];
   // フードクリエイトタブの場合はクロス分析以外も使えるよう allData を切り替え
@@ -492,6 +568,7 @@ function switchDept(deptKey, btn) {
 
 // ===== VIEW SWITCH =====
 function switchView(name, btn) {
+  closeMobileIfNeeded();
   currentView = name;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   btn.classList.add('active');
@@ -596,7 +673,7 @@ function renderMetrics() {
   document.getElementById('metrics-row').innerHTML = isAll ? `
     <!-- 全社タブ: 2行レイアウト -->
     <!-- 1行目: 合計KPI -->
-    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:4px">
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px">
       <div class="metric-card">
         <div class="metric-label">総売上（店舗＋フード）</div>
         <div class="metric-value" style="font-size:20px">${fmtM(totalUri)}</div>
@@ -624,7 +701,7 @@ function renderMetrics() {
       </div>
     </div>
     <!-- 2行目: 店舗／フード内訳 -->
-    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
       <div class="metric-card" style="border-top:3px solid #1a6fc4">
         <div class="metric-label" style="color:#1a6fc4">🍽 店舗売上</div>
         <div class="metric-value" style="font-size:20px">${fmtM(storeUri)}</div>
@@ -891,7 +968,7 @@ function renderStores() {
           <button class="sbtn" onclick="sortStores('bgt',this)">予算比順</button>
         </div>
       </div>
-      <div style="overflow-x:auto">
+      <div class="dtable-wrap">
         <table class="dtable" id="store-table">
           <thead><tr>
             <th>#</th><th>店舗名</th><th>区分</th><th>業態</th><th>地域</th>
@@ -1323,7 +1400,7 @@ function renderFoodStores(el) {
   el.innerHTML = `
     <div class="card">
       <div class="ctitle"><div class="ctitle-l">区分別売上一覧（${rows.length}区分）</div></div>
-      <div style="overflow-x:auto">
+      <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
             <th>#</th><th>区分</th>
