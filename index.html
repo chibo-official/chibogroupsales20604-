@@ -810,12 +810,17 @@ function renderOverview() {
 
   const legendEl = document.getElementById('dept-legend');
   if (legendEl) {
-    legendEl.innerHTML = DEPT_LABELS.map((lb,i)=>`
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">
+    const totalDeptUri = allDeptUris.reduce((s,v)=>s+v, 0);
+    legendEl.innerHTML = DEPT_LABELS.map((lb,i)=>{
+      const pct = totalDeptUri > 0 ? (allDeptUris[i]/totalDeptUri*100).toFixed(1) : '0.0';
+      return `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px">
         <span style="width:8px;height:8px;border-radius:2px;background:${DEPT_COLS[i]};display:inline-block;flex-shrink:0"></span>
         <span style="flex:1;color:var(--text2)">${lb}</span>
-        <span style="font-weight:500">¥${Math.round(allDeptUris[i]/1000).toLocaleString()}千円</span>
-      </div>`).join('');
+        <span style="color:var(--text3);min-width:38px;text-align:right">${pct}%</span>
+        <span style="font-weight:500;min-width:90px;text-align:right">¥${Math.round(allDeptUris[i]/1000).toLocaleString()}千円</span>
+      </div>`;
+    }).join('');
   }
 
   charts.area = new Chart(document.getElementById('c-area').getContext('2d'),{
@@ -831,7 +836,11 @@ function renderOverview() {
       responsive:true,maintainAspectRatio:false,cutout:'60%',
       plugins:{
         legend:{display:false},
-        tooltip:{callbacks:{label:c=>`${c.label}: ¥${c.parsed.toLocaleString()}千円`}}
+        tooltip:{callbacks:{label:c=>{
+            const total=c.chart.data.datasets[0].data.reduce((s,v)=>s+v,0);
+            const pct=total>0?(c.parsed/total*100).toFixed(1):'0.0';
+            return `${c.label}: ¥${c.parsed.toLocaleString()}千円 (${pct}%)`;
+          }}}
       }
     }
   });
